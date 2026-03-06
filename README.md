@@ -51,3 +51,21 @@ Frontend expects API at `/api` (proxied by Vite to `http://localhost:5000`).
 Optional env override:
 
 - `VITE_API_BASE_URL=http://localhost:5000/api`
+
+## Local and Live Environment Setup
+
+Use either one shared Mongo URI or separate local/live URIs.
+
+`backend/.env` for local:
+
+```env
+PORT=5000
+MONGODB_URI_LOCAL=mongodb://127.0.0.1:27017/dreamcar
+MONGODB_URI_PROD=
+```
+
+On Render (Environment variables):
+
+- `MONGODB_URI=<your-atlas-uri>`
+- or set `MONGODB_URI_PROD=<your-atlas-uri>` with `NODE_ENV=production`
+- `CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY`, `CLOUDINARY_API_SECRET`
