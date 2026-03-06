@@ -10,6 +10,7 @@ import "./App.css";
 
 const App = () => {
   const [user, setUser] = useState(() => getStoredUser());
+  const isAuthenticated = Boolean(user);
   const isAdmin = useMemo(() => user?.role === "admin", [user]);
 
   const handleLogout = () => {
@@ -25,8 +26,8 @@ const App = () => {
             DreamCar
           </NavLink>
           <nav className="nav-links">
-            <NavLink to="/">Home</NavLink>
-            <NavLink to="/add-car">Sell Car</NavLink>
+            {isAuthenticated ? <NavLink to="/">Home</NavLink> : null}
+            {isAuthenticated ? <NavLink to="/add-car">Sell Car</NavLink> : null}
             {isAdmin ? <NavLink to="/admin">Admin</NavLink> : <NavLink to="/login">Login</NavLink>}
             {user ? (
               <button type="button" className="btn btn-secondary" onClick={handleLogout}>
@@ -39,10 +40,13 @@ const App = () => {
 
       <main className="container content-area">
         <Routes>
-          <Route path="/" element={<HomePage />} />
-          <Route path="/cars/:id" element={<CarDetailPage />} />
-          <Route path="/add-car" element={<AddCarPage />} />
-          <Route path="/login" element={<LoginPage onLogin={setUser} />} />
+          <Route path="/" element={isAuthenticated ? <HomePage /> : <Navigate to="/login" replace />} />
+          <Route path="/cars/:id" element={isAuthenticated ? <CarDetailPage /> : <Navigate to="/login" replace />} />
+          <Route path="/add-car" element={isAuthenticated ? <AddCarPage /> : <Navigate to="/login" replace />} />
+          <Route
+            path="/login"
+            element={!isAuthenticated ? <LoginPage onLogin={setUser} /> : <Navigate to={isAdmin ? "/admin" : "/"} replace />}
+          />
           <Route path="/admin" element={isAdmin ? <AdminDashboardPage /> : <Navigate to="/login" replace />} />
           <Route path="*" element={<p>Page not found.</p>} />
         </Routes>

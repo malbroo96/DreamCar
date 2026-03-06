@@ -53,7 +53,7 @@ const LoginPage = ({ onLogin }) => {
               setError("");
               const user = await loginWithGoogleCredential(response.credential);
               onLogin?.(user);
-              navigate("/admin");
+              navigate(user.role === "admin" ? "/admin" : "/");
             } catch (err) {
               setError(err.response?.data?.message || "Google login failed");
             }
