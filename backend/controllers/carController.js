@@ -1,6 +1,16 @@
 import Car from "../models/Car.js";
 import cloudinary from "../config/cloudinary.js";
 
+const hasCloudinaryConfig = () =>
+  Boolean(
+    process.env.CLOUDINARY_CLOUD_NAME &&
+      process.env.CLOUDINARY_API_KEY &&
+      process.env.CLOUDINARY_API_SECRET &&
+      process.env.CLOUDINARY_CLOUD_NAME !== "your_cloud_name" &&
+      process.env.CLOUDINARY_API_KEY !== "your_api_key" &&
+      process.env.CLOUDINARY_API_SECRET !== "your_api_secret"
+  );
+
 const parseNumber = (value) => {
   if (value === undefined || value === null || value === "") return undefined;
   const parsed = Number(value);
@@ -56,6 +66,7 @@ const uploadSingleImage = (file) =>
 
 const uploadImages = async (files = []) => {
   if (!files.length) return [];
+  if (!hasCloudinaryConfig()) return [];
   const uploads = files.map((file) => uploadSingleImage(file));
   return Promise.all(uploads);
 };
