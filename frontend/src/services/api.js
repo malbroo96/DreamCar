@@ -1,6 +1,8 @@
 import axios from "axios";
 
-const baseURL = import.meta.env.VITE_API_BASE_URL || "/api";
+const baseURL =
+  import.meta.env.VITE_API_BASE_URL ||
+  (import.meta.env.PROD ? "https://dreamcar-wvym.onrender.com/api" : "/api");
 const AUTH_TOKEN_KEY = "dreamcar_auth_token";
 
 const api = axios.create({
