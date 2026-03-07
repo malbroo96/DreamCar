@@ -1,5 +1,6 @@
 import jwt from "jsonwebtoken";
 import { OAuth2Client } from "google-auth-library";
+import User from "../models/User.js";
 
 const client = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
 
@@ -45,12 +46,28 @@ export const googleLogin = async (req, res, next) => {
       throw new Error("Invalid Google token payload");
     }
 
+    const role = isAdminEmail(payload.email) ? "admin" : "user";
+    const userDoc = await User.findOneAndUpdate(
+      { googleId: payload.sub },
+      {
+        googleId: payload.sub,
+        email: payload.email.toLowerCase(),
+        name: payload.name || "",
+        picture: payload.picture || "",
+        role,
+      },
+      { new: true, upsert: true, setDefaultsOnInsert: true }
+    );
+
     const user = {
-      id: payload.sub,
-      name: payload.name || "",
-      email: payload.email.toLowerCase(),
-      picture: payload.picture || "",
-      role: isAdminEmail(payload.email) ? "admin" : "user",
+      id: userDoc.googleId,
+      name: userDoc.name,
+      email: userDoc.email,
+      picture: userDoc.picture,
+      role: userDoc.role,
+      bio: userDoc.bio,
+      phone: userDoc.phone,
+      location: userDoc.location,
     };
 
     const token = signAuthToken({
@@ -67,5 +84,21 @@ export const googleLogin = async (req, res, next) => {
 };
 
 export const getMe = async (req, res) => {
-  res.json({ user: req.user });
+  const userDoc = await User.findOne({ googleId: req.user.id });
+  if (!userDoc) {
+    return res.json({ user: req.user });
+  }
+
+  return res.json({
+    user: {
+      id: userDoc.googleId,
+      name: userDoc.name,
+      email: userDoc.email,
+      picture: userDoc.picture,
+      role: userDoc.role,
+      bio: userDoc.bio,
+      phone: userDoc.phone,
+      location: userDoc.location,
+    },
+  });
 };

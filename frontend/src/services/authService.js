@@ -11,7 +11,7 @@ export const getStoredUser = () => {
   }
 };
 
-const setStoredUser = (user) => {
+export const setStoredUser = (user) => {
   if (!user) {
     localStorage.removeItem(AUTH_USER_KEY);
     return;

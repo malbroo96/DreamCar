@@ -1,15 +1,20 @@
 import { useEffect, useState } from "react";
-import { useParams } from "react-router-dom";
+import { useNavigate, useParams } from "react-router-dom";
 import { getCarById } from "../services/carService";
+import { getStoredUser } from "../services/authService";
+import { startConversation } from "../services/messageService";
 
 const fallback =
   "https://images.unsplash.com/photo-1584345604476-8ec5f452d1f2?auto=format&fit=crop&w=1200&q=80";
 
 const CarDetailPage = () => {
+  const navigate = useNavigate();
   const { id } = useParams();
+  const user = getStoredUser();
   const [car, setCar] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [chatError, setChatError] = useState("");
 
   useEffect(() => {
     const fetchCar = async () => {
@@ -30,6 +35,19 @@ const CarDetailPage = () => {
   if (loading) return <p>Loading car details...</p>;
   if (error) return <p style={{ color: "#c63030" }}>{error}</p>;
   if (!car) return <p>Car not found.</p>;
+
+  const handleStartChat = async () => {
+    try {
+      setChatError("");
+      const thread = await startConversation({
+        carId: car._id,
+        text: `Hi, I am interested in your listing: ${car.title}`,
+      });
+      navigate(`/messages?thread=${thread._id}`);
+    } catch (err) {
+      setChatError(err.response?.data?.message || "Failed to start chat");
+    }
+  };
 
   return (
     <section className="card" style={{ padding: "1rem" }}>
@@ -52,6 +70,12 @@ const CarDetailPage = () => {
           <p>{car.location}</p>
           <p>{car.description}</p>
           <p style={{ color: "#4c6785" }}>Posted on {new Date(car.createdAt).toLocaleDateString()}</p>
+          {chatError ? <p style={{ color: "#c63030" }}>{chatError}</p> : null}
+          {car.ownerId && car.ownerId !== user?.id ? (
+            <button type="button" className="btn btn-primary" onClick={handleStartChat}>
+              Message Seller
+            </button>
+          ) : null}
         </div>
       </div>
     </section>

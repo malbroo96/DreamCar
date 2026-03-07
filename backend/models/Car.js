@@ -28,6 +28,9 @@ const carSchema = new mongoose.Schema(
     kilometersDriven: { type: Number, required: true },
     description: { type: String, required: true, trim: true },
     location: { type: String, required: true, trim: true },
+    ownerId: { type: String, index: true },
+    ownerEmail: { type: String, trim: true, lowercase: true },
+    ownerName: { type: String, trim: true },
     images: { type: [carImageSchema], default: [] },
     status: {
       type: String,

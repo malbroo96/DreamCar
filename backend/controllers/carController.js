@@ -93,6 +93,11 @@ const applyUpdatableFields = (target, source) => {
   });
 };
 
+const buildOwnerScopedQuery = (req, baseQuery = {}) => {
+  if (req.user?.role === "admin") return { ...baseQuery };
+  return { ...baseQuery, ownerId: req.user?.id };
+};
+
 const destroyImages = async (images = []) => {
   await Promise.all(
     images
@@ -104,6 +109,10 @@ const destroyImages = async (images = []) => {
 export const getCars = async (req, res, next) => {
   try {
     const filters = buildFilters(req.query);
+    if (req.query.mine === "true") {
+      filters.ownerId = req.user.id;
+      delete filters.status;
+    }
     const cars = await Car.find(filters).sort({ createdAt: -1 });
     res.json(cars);
   } catch (error) {
@@ -142,6 +151,9 @@ export const createCar = async (req, res, next) => {
       description: req.body.description,
       location: req.body.location,
       status: req.body.status || "approved",
+      ownerId: req.user.id,
+      ownerEmail: req.user.email,
+      ownerName: req.user.name,
       images: uploadedImages,
     });
 
@@ -153,11 +165,12 @@ export const createCar = async (req, res, next) => {
 
 export const updateCar = async (req, res, next) => {
   try {
-    const car = await Car.findOne({ _id: req.params.id, status: "approved" });
+    const query = buildOwnerScopedQuery(req, { _id: req.params.id, status: "approved" });
+    const car = await Car.findOne(query);
 
     if (!car) {
       res.status(404);
-      throw new Error("Car not found");
+      throw new Error("Car not found or access denied");
     }
 
     applyUpdatableFields(car, req.body);
@@ -176,11 +189,12 @@ export const updateCar = async (req, res, next) => {
 
 export const deleteCar = async (req, res, next) => {
   try {
-    const car = await Car.findOne({ _id: req.params.id, status: "approved" });
+    const query = buildOwnerScopedQuery(req, { _id: req.params.id, status: "approved" });
+    const car = await Car.findOne(query);
 
     if (!car) {
       res.status(404);
-      throw new Error("Car not found");
+      throw new Error("Car not found or access denied");
     }
 
     await destroyImages(car.images);

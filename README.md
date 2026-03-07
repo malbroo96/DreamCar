@@ -115,6 +115,8 @@ Redeploy after changing env vars.
 - `/api/auth/google` exchanges Google credential for app JWT.
 - Admin APIs require JWT + admin role.
 - Car APIs currently require login.
+- Regular users can update/delete only their own listings.
+- Admin can manage all listings via `/api/admin/*`.
 - Frontend routes for listing/viewing/selling cars require login.
 
 ## Troubleshooting
