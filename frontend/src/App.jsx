@@ -7,6 +7,7 @@ import AdminDashboardPage from "./pages/AdminDashboardPage";
 import LoginPage from "./pages/LoginPage";
 import ProfilePage from "./pages/ProfilePage";
 import MessagesPage from "./pages/MessagesPage";
+import ChatbotWidget from "./components/chatbot/ChatbotWidget";
 import { getStoredUser, logout } from "./services/authService";
 import { getMessageNotifications } from "./services/messageService";
 import "./App.css";
@@ -14,67 +15,102 @@ import "./App.css";
 const App = () => {
   const [user, setUser] = useState(() => getStoredUser());
   const [unreadCount, setUnreadCount] = useState(0);
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
+
   const isAuthenticated = Boolean(user);
   const isAdmin = useMemo(() => user?.role === "admin", [user]);
 
   useEffect(() => {
-    if (!isAuthenticated) {
-      return undefined;
-    }
-
+    if (!isAuthenticated) return undefined;
     let isMounted = true;
 
     const loadUnreadCount = async () => {
       try {
         const data = await getMessageNotifications();
-        if (isMounted) {
-          setUnreadCount(Number(data?.unreadCount || 0));
-        }
+        if (isMounted) setUnreadCount(Number(data?.unreadCount || 0));
       } catch {
-        if (isMounted) {
-          setUnreadCount(0);
-        }
+        if (isMounted) setUnreadCount(0);
       }
     };
 
     loadUnreadCount();
     const intervalId = setInterval(loadUnreadCount, 20000);
-
-    return () => {
-      isMounted = false;
-      clearInterval(intervalId);
-    };
+    return () => { isMounted = false; clearInterval(intervalId); };
   }, [isAuthenticated]);
 
   const handleLogout = () => {
     logout();
     setUnreadCount(0);
     setUser(null);
+    setMobileNavOpen(false);
   };
 
   return (
     <div className="app-shell">
       <header className="topbar">
         <div className="container topbar-inner">
-          <NavLink to="/" className="brand">
+          {/* Brand */}
+          <NavLink to="/" className="brand" onClick={() => setMobileNavOpen(false)}>
+            <span className="brand-icon">🚗</span>
             DreamCar
           </NavLink>
-          <nav className="nav-links">
-            {isAuthenticated ? <NavLink to="/">Home</NavLink> : null}
-            {isAuthenticated ? <NavLink to="/add-car">Sell Car</NavLink> : null}
-            {isAuthenticated ? (
-              <NavLink to="/messages">
-                Messages{unreadCount > 0 ? ` (${unreadCount})` : ""}
+
+          {/* Hamburger (mobile) */}
+          <button
+            className="nav-hamburger"
+            aria-label="Toggle navigation"
+            onClick={() => setMobileNavOpen((v) => !v)}
+          >
+            <span /><span /><span />
+          </button>
+
+          {/* Nav links */}
+          <nav className={`nav-links ${mobileNavOpen ? "nav-links--open" : ""}`}>
+            {isAuthenticated && (
+              <NavLink to="/" onClick={() => setMobileNavOpen(false)}>
+                Browse Cars
               </NavLink>
-            ) : null}
-            {isAuthenticated ? <NavLink to="/profile">Profile</NavLink> : null}
-            {!isAuthenticated ? <NavLink to="/login">Login</NavLink> : null}
-            {isAdmin ? <NavLink to="/admin">Admin</NavLink> : null}
-            {user ? (
-              <button type="button" className="btn btn-secondary" onClick={handleLogout}>
+            )}
+            {isAuthenticated && (
+              <NavLink to="/add-car" className="nav-sell-link" onClick={() => setMobileNavOpen(false)}>
+                + Sell Car
+              </NavLink>
+            )}
+            {isAuthenticated && (
+              <NavLink to="/messages" className="nav-messages-link" onClick={() => setMobileNavOpen(false)}>
+                Messages
+                {unreadCount > 0 && (
+                  <span className="nav-badge">{unreadCount > 99 ? "99+" : unreadCount}</span>
+                )}
+              </NavLink>
+            )}
+            {isAdmin && (
+              <NavLink to="/admin" onClick={() => setMobileNavOpen(false)}>
+                Admin
+              </NavLink>
+            )}
+            {!isAuthenticated && (
+              <NavLink to="/login" onClick={() => setMobileNavOpen(false)}>
+                Login
+              </NavLink>
+            )}
+            {isAuthenticated && (
+              <NavLink to="/profile" className="nav-profile-link" onClick={() => setMobileNavOpen(false)}>
+                {user?.picture ? (
+                  <img src={user.picture} alt={user.name} className="nav-avatar" />
+                ) : (
+                  <span className="nav-avatar nav-avatar--initials">
+                    {(user?.name || "U")[0].toUpperCase()}
+                  </span>
+                )}
+                {user?.name?.split(" ")[0] || "Profile"}
+              </NavLink>
+            )}
+            {isAuthenticated && (
+              <button type="button" className="btn btn-secondary btn-logout" onClick={handleLogout}>
                 Logout
               </button>
-            ) : null}
+            )}
           </nav>
         </div>
       </header>
@@ -94,9 +130,12 @@ const App = () => {
             element={!isAuthenticated ? <LoginPage onLogin={setUser} /> : <Navigate to={isAdmin ? "/admin" : "/"} replace />}
           />
           <Route path="/admin" element={isAdmin ? <AdminDashboardPage /> : <Navigate to="/login" replace />} />
-          <Route path="*" element={<p>Page not found.</p>} />
+          <Route path="*" element={<div style={{ textAlign: "center", padding: "3rem", color: "#7a96b4" }}><h2>Page not found</h2><p>The page you're looking for doesn't exist.</p></div>} />
         </Routes>
       </main>
+
+      {/* AI Customer Support Chatbot — shown only when logged in */}
+      {isAuthenticated && <ChatbotWidget />}
     </div>
   );
 };
