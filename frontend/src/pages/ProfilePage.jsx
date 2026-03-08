@@ -420,6 +420,7 @@ const ProfilePage = ({ onProfileUpdated }) => {
                     initialValues={selectedCar}
                     onSubmit={handleUpdateCar}
                     submitLabel="Update Listing"
+                    hasExistingRC={Boolean(selectedCar.rcDocument?.publicId)}
                   />
                 </div>
               )}

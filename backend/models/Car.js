@@ -8,6 +8,16 @@ const carImageSchema = new mongoose.Schema(
   { _id: false }
 );
 
+/* ── RC Document stored as private Cloudinary asset ── */
+const rcDocumentSchema = new mongoose.Schema(
+  {
+    publicId: { type: String, required: true }, // Cloudinary public_id
+    resourceType: { type: String, default: "image" }, // "image" for jpg/png, "raw" for pdf
+    format: { type: String }, // "pdf", "jpg", "png"
+  },
+  { _id: false }
+);
+
 const carSchema = new mongoose.Schema(
   {
     title: { type: String, required: true, trim: true },
@@ -32,6 +42,12 @@ const carSchema = new mongoose.Schema(
     ownerEmail: { type: String, trim: true, lowercase: true },
     ownerName: { type: String, trim: true },
     images: { type: [carImageSchema], default: [] },
+    /* RC Document — stored privately, never exposed as a direct URL */
+    rcDocument: {
+      type: rcDocumentSchema,
+      required: [true, "RC document is required"],
+    },
+    rcVerified: { type: Boolean, default: false }, // admin can mark as verified
     status: {
       type: String,
       enum: ["approved", "pending", "rejected"],

@@ -29,6 +29,12 @@ export const deleteCar = async (id) => {
   return response.data;
 };
 
+/* ── RC Document: get a short-lived signed URL (owner/admin only) ── */
+export const getRCDocumentUrl = async (carId) => {
+  const response = await api.get(`/cars/${carId}/rc-url`);
+  return response.data; // { url, expiresAt, format }
+};
+
 export const getAdminCars = async () => {
   const response = await api.get("/admin/cars");
   return response.data;

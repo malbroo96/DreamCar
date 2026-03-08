@@ -1,0 +1,277 @@
+/* ═══════════════════════════════════════════════
+   CarForm.css — RC Upload Section Styles
+═══════════════════════════════════════════════ */
+
+.car-form {
+  padding: 1.5rem;
+}
+
+.car-form-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 1rem;
+}
+
+.field--full {
+  grid-column: 1 / -1;
+}
+
+.field-hint {
+  font-size: 0.78rem;
+  color: #7a96b4;
+  margin-top: 0.25rem;
+  display: block;
+}
+
+.car-form-footer {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin-top: 1.5rem;
+  flex-wrap: wrap;
+}
+
+.rc-edit-note {
+  margin: 0;
+  font-size: 0.82rem;
+  color: #7a96b4;
+}
+
+/* ══════════════════════════════════════════
+   RC UPLOAD SECTION
+══════════════════════════════════════════ */
+.rc-upload-section {
+  background: #f8fbff;
+  border: 1.5px solid #dce8fc;
+  border-radius: 14px;
+  padding: 1.25rem;
+  margin-top: 0.5rem;
+}
+
+.rc-upload-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+.rc-upload-title {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+}
+
+.rc-icon {
+  font-size: 1.4rem;
+  flex-shrink: 0;
+  margin-top: 0.1rem;
+}
+
+.rc-label {
+  display: block;
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: #0c1f36;
+  margin-bottom: 0.25rem;
+  cursor: pointer;
+}
+
+.rc-description {
+  margin: 0;
+  font-size: 0.82rem;
+  color: #4c6785;
+  line-height: 1.5;
+}
+
+/* Existing RC badge */
+.rc-existing-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  background: #f0fff6;
+  border: 1px solid #b8f0d0;
+  color: #177245;
+  border-radius: 20px;
+  padding: 0.3rem 0.75rem;
+  font-size: 0.8rem;
+  font-weight: 700;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+/* ── Dropzone ── */
+.rc-dropzone {
+  position: relative;
+  border: 2px dashed #c8d8ed;
+  border-radius: 12px;
+  background: #fff;
+  transition: all 0.2s;
+  overflow: hidden;
+  margin-bottom: 0.75rem;
+  min-height: 100px;
+}
+
+.rc-dropzone:hover {
+  border-color: #0b6ef3;
+  background: #f4f8ff;
+}
+
+.rc-dropzone--selected {
+  border-style: solid;
+  border-color: #0b6ef3;
+  background: #f4f8ff;
+}
+
+.rc-dropzone--error {
+  border-color: #ef4444;
+  background: #fff8f8;
+}
+
+/* Hidden file input overlays entire dropzone */
+.rc-file-input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  cursor: pointer;
+  z-index: 2;
+}
+
+/* Placeholder state */
+.rc-dropzone-placeholder {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 1.5rem;
+  text-align: center;
+  gap: 0.35rem;
+  pointer-events: none;
+}
+
+.rc-upload-icon {
+  font-size: 1.5rem;
+  color: #0b6ef3;
+  margin-bottom: 0.25rem;
+}
+
+.rc-upload-text {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: #0b6ef3;
+}
+
+.rc-upload-formats {
+  font-size: 0.78rem;
+  color: #7a96b4;
+}
+
+/* Selected state */
+.rc-file-selected {
+  display: flex;
+  align-items: center;
+  gap: 0.9rem;
+  padding: 0.9rem 1rem;
+  pointer-events: none;
+}
+
+.rc-pdf-icon {
+  font-size: 2rem;
+  flex-shrink: 0;
+}
+
+.rc-img-preview {
+  width: 52px;
+  height: 52px;
+  object-fit: cover;
+  border-radius: 8px;
+  border: 1px solid #dce8fc;
+  flex-shrink: 0;
+}
+
+.rc-file-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.rc-file-name {
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: #0c1f36;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.rc-file-size {
+  font-size: 0.78rem;
+  color: #7a96b4;
+  margin-top: 0.15rem;
+}
+
+.rc-remove-btn {
+  pointer-events: all;
+  background: #fff0f0;
+  border: 1px solid #ffd0d0;
+  color: #c63030;
+  border-radius: 8px;
+  padding: 0.35rem 0.65rem;
+  font-size: 0.78rem;
+  font-weight: 600;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: all 0.2s;
+  z-index: 3;
+  position: relative;
+}
+
+.rc-remove-btn:hover {
+  background: #c63030;
+  color: #fff;
+}
+
+/* Error message */
+.rc-error {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  background: #fff0f0;
+  border: 1px solid #ffd0d0;
+  color: #c63030;
+  border-radius: 8px;
+  padding: 0.55rem 0.85rem;
+  font-size: 0.83rem;
+  font-weight: 600;
+  margin-bottom: 0.75rem;
+}
+
+/* Info box */
+.rc-info-box {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  background: #f0f6ff;
+  border: 1px solid #dce8fc;
+  border-radius: 8px;
+  padding: 0.6rem 0.85rem;
+  font-size: 0.8rem;
+  color: #4c6785;
+  line-height: 1.5;
+}
+
+.rc-info-icon {
+  flex-shrink: 0;
+  font-size: 0.9rem;
+}
+
+/* ── Responsive ── */
+@media (max-width: 600px) {
+  .rc-upload-header {
+    flex-direction: column;
+  }
+  .rc-file-selected {
+    flex-wrap: wrap;
+  }
+}
