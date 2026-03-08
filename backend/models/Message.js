@@ -6,6 +6,7 @@ const messageSchema = new mongoose.Schema(
     senderId: { type: String, required: true, index: true },
     senderName: { type: String, required: true },
     text: { type: String, required: true, trim: true },
+    readBy: { type: [String], default: [] },
   },
   { timestamps: true }
 );

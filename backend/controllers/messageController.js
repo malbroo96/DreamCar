@@ -1,6 +1,7 @@
 import Car from "../models/Car.js";
 import Message from "../models/Message.js";
 import MessageThread from "../models/MessageThread.js";
+import User from "../models/User.js";
 
 const formatParticipant = (thread, currentUserId) => {
   if (thread.buyerId === currentUserId) {
@@ -43,12 +44,15 @@ export const startConversation = async (req, res, next) => {
       carId: car._id,
       buyerId: req.user.id,
       sellerId: car.ownerId,
+      threadType: "listing",
     });
 
     if (!thread) {
       thread = await MessageThread.create({
+        threadType: "listing",
         carId: car._id,
         carTitle: car.title,
+        directKey: "",
         participants: [req.user.id, car.ownerId],
         buyerId: req.user.id,
         buyerName: req.user.name || req.user.email,
@@ -66,6 +70,67 @@ export const startConversation = async (req, res, next) => {
         senderId: req.user.id,
         senderName: req.user.name || req.user.email,
         text: String(text).trim(),
+        readBy: [req.user.id],
+      });
+      thread.lastMessageAt = new Date();
+      await thread.save();
+    }
+
+    res.status(201).json(thread);
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const startDirectConversation = async (req, res, next) => {
+  try {
+    const { userId, text } = req.body || {};
+    if (!userId) {
+      res.status(400);
+      throw new Error("userId is required");
+    }
+
+    if (userId === req.user.id) {
+      res.status(400);
+      throw new Error("You cannot message yourself");
+    }
+
+    const targetUser = await User.findOne({ googleId: userId });
+    if (!targetUser) {
+      res.status(404);
+      throw new Error("User not found");
+    }
+
+    const directKey = [req.user.id, userId].sort().join(":");
+
+    let thread = await MessageThread.findOne({
+      threadType: "direct",
+      directKey,
+    });
+
+    if (!thread) {
+      thread = await MessageThread.create({
+        threadType: "direct",
+        directKey,
+        carTitle: "Direct message",
+        participants: [req.user.id, userId],
+        buyerId: req.user.id,
+        buyerName: req.user.name || req.user.email,
+        buyerEmail: req.user.email,
+        sellerId: targetUser.googleId,
+        sellerName: targetUser.name || targetUser.email,
+        sellerEmail: targetUser.email,
+        lastMessageAt: new Date(),
+      });
+    }
+
+    if (text && String(text).trim()) {
+      await Message.create({
+        threadId: thread._id,
+        senderId: req.user.id,
+        senderName: req.user.name || req.user.email,
+        text: String(text).trim(),
+        readBy: [req.user.id],
       });
       thread.lastMessageAt = new Date();
       await thread.save();
@@ -105,6 +170,16 @@ export const getThreadMessages = async (req, res, next) => {
     }
 
     const messages = await Message.find({ threadId: thread._id }).sort({ createdAt: 1 });
+    await Message.updateMany(
+      {
+        threadId: thread._id,
+        senderId: { $ne: req.user.id },
+        readBy: { $ne: req.user.id },
+      },
+      {
+        $addToSet: { readBy: req.user.id },
+      }
+    );
 
     res.json({
       thread: {
@@ -140,12 +215,55 @@ export const sendThreadMessage = async (req, res, next) => {
       senderId: req.user.id,
       senderName: req.user.name || req.user.email,
       text,
+      readBy: [req.user.id],
     });
 
     thread.lastMessageAt = new Date();
     await thread.save();
 
     res.status(201).json(message);
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const getMessageNotifications = async (req, res, next) => {
+  try {
+    const threads = await MessageThread.find({ participants: req.user.id })
+      .select("_id carTitle buyerId sellerId")
+      .sort({ lastMessageAt: -1 });
+
+    if (!threads.length) {
+      return res.json({ unreadCount: 0, items: [] });
+    }
+
+    const threadIds = threads.map((thread) => thread._id);
+    const threadMap = new Map(threads.map((thread) => [String(thread._id), thread]));
+
+    const unreadFilter = {
+      threadId: { $in: threadIds },
+      senderId: { $ne: req.user.id },
+      readBy: { $ne: req.user.id },
+    };
+
+    const [unreadCount, unreadMessages] = await Promise.all([
+      Message.countDocuments(unreadFilter),
+      Message.find(unreadFilter).sort({ createdAt: -1 }).limit(10),
+    ]);
+
+    const items = unreadMessages.map((message) => {
+      const thread = threadMap.get(String(message.threadId));
+      return {
+        _id: message._id,
+        threadId: message.threadId,
+        carTitle: thread?.carTitle || "Listing",
+        senderName: message.senderName,
+        text: message.text,
+        createdAt: message.createdAt,
+      };
+    });
+
+    res.json({ unreadCount, items });
   } catch (error) {
     next(error);
   }

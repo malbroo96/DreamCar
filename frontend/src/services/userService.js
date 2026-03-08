@@ -9,3 +9,8 @@ export const updateMyProfile = async (payload) => {
   const response = await api.put("/users/me", payload);
   return response.data;
 };
+
+export const searchUsers = async (query) => {
+  const response = await api.get("/users/search", { params: { q: query } });
+  return response.data;
+};

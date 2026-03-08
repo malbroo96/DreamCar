@@ -5,8 +5,18 @@ export const startConversation = async (payload) => {
   return response.data;
 };
 
+export const startDirectConversation = async (payload) => {
+  const response = await api.post("/messages/start-direct", payload);
+  return response.data;
+};
+
 export const getThreads = async () => {
   const response = await api.get("/messages/threads");
+  return response.data;
+};
+
+export const getMessageNotifications = async () => {
+  const response = await api.get("/messages/notifications");
   return response.data;
 };
 

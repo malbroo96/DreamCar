@@ -47,21 +47,42 @@ export const googleLogin = async (req, res, next) => {
     }
 
     const role = isAdminEmail(payload.email) ? "admin" : "user";
-    const userDoc = await User.findOneAndUpdate(
-      { googleId: payload.sub },
-      {
+    const googleName = payload.name || "";
+    const defaultUsername = (payload.email || "").split("@")[0].trim().toLowerCase();
+    let userDoc = await User.findOne({ googleId: payload.sub });
+
+    if (!userDoc) {
+      userDoc = await User.create({
         googleId: payload.sub,
         email: payload.email.toLowerCase(),
-        name: payload.name || "",
+        name: googleName,
+        googleName,
+        username: defaultUsername,
         picture: payload.picture || "",
         role,
-      },
-      { new: true, upsert: true, setDefaultsOnInsert: true }
-    );
+      });
+    } else {
+      userDoc.email = payload.email.toLowerCase();
+      userDoc.picture = payload.picture || userDoc.picture;
+      userDoc.role = role;
+      userDoc.googleName = googleName || userDoc.googleName;
+
+      // Preserve profile-edited name; only backfill from Google when empty.
+      if (!userDoc.name?.trim() && googleName) {
+        userDoc.name = googleName;
+      }
+      if (!userDoc.username?.trim() && defaultUsername) {
+        userDoc.username = defaultUsername;
+      }
+
+      await userDoc.save();
+    }
 
     const user = {
       id: userDoc.googleId,
       name: userDoc.name,
+      username: userDoc.username,
+      googleName: userDoc.googleName,
       email: userDoc.email,
       picture: userDoc.picture,
       role: userDoc.role,
@@ -93,6 +114,8 @@ export const getMe = async (req, res) => {
     user: {
       id: userDoc.googleId,
       name: userDoc.name,
+      username: userDoc.username,
+      googleName: userDoc.googleName,
       email: userDoc.email,
       picture: userDoc.picture,
       role: userDoc.role,
