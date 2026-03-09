@@ -8,6 +8,8 @@ import LoginPage from "./pages/LoginPage";
 import ProfilePage from "./pages/ProfilePage";
 import MessagesPage from "./pages/MessagesPage";
 import ChatbotWidget from "./components/chatbot/ChatbotWidget";
+import DealerProfilePage from "./pages/DealerProfilePage";
+import CarsAnimation from "./components/CarsAnimation";
 import { getStoredUser, logout } from "./services/authService";
 import { getMessageNotifications } from "./services/messageService";
 import "./App.css";
@@ -47,6 +49,9 @@ const App = () => {
 
   return (
     <div className="app-shell">
+      {/* Background car animations */}
+      <CarsAnimation />
+      <div className="app-content-wrapper">
       <header className="topbar">
         <div className="container topbar-inner">
           {/* Brand */}
@@ -119,6 +124,7 @@ const App = () => {
         <Routes>
           <Route path="/" element={isAuthenticated ? <HomePage /> : <Navigate to="/login" replace />} />
           <Route path="/cars/:id" element={isAuthenticated ? <CarDetailPage /> : <Navigate to="/login" replace />} />
+          <Route path="/dealer/:id" element={isAuthenticated ? <DealerProfilePage /> : <Navigate to="/login" replace />} />
           <Route path="/add-car" element={isAuthenticated ? <AddCarPage /> : <Navigate to="/login" replace />} />
           <Route path="/messages" element={isAuthenticated ? <MessagesPage /> : <Navigate to="/login" replace />} />
           <Route
@@ -133,6 +139,8 @@ const App = () => {
           <Route path="*" element={<div style={{ textAlign: "center", padding: "3rem", color: "#7a96b4" }}><h2>Page not found</h2><p>The page you're looking for doesn't exist.</p></div>} />
         </Routes>
       </main>
+
+      </div>{/* end app-content-wrapper */}
 
       {/* AI Customer Support Chatbot — shown only when logged in */}
       {isAuthenticated && <ChatbotWidget />}
