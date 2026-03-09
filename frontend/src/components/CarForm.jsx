@@ -25,7 +25,7 @@ const CarForm = ({
   onSubmit,
   submitLabel = "Submit",
   includeStatus = false,
-  hasExistingRC = false, // true when editing a car that already has an RC
+  hasExistingRC = false,
 }) => {
   const mergedInitialValues = useMemo(
     () => ({ ...defaultFormState, ...(initialValues || {}) }),
@@ -34,9 +34,16 @@ const CarForm = ({
 
   const [form, setForm] = useState(mergedInitialValues);
   const [imageFiles, setImageFiles] = useState([]);
+
+  /* existing DB images — user can delete these individually */
+  const [existingImages, setExistingImages] = useState(
+    () => (initialValues?.images || [])
+  );
+
   const [rcFile, setRcFile] = useState(null);
+  const [rcRemoved, setRcRemoved] = useState(false); // user clicked "Remove RC"
   const [rcError, setRcError] = useState("");
-  const [rcPreview, setRcPreview] = useState(null); // for image previews
+  const [rcPreview, setRcPreview] = useState(null);
   const rcInputRef = useRef(null);
 
   const isEditing = Boolean(initialValues);
@@ -89,28 +96,38 @@ const CarForm = ({
   const handleSubmit = async (e) => {
     e.preventDefault();
 
-    /* Validate RC — required on create, required on edit too */
-    if (!rcFile && !hasExistingRC) {
+    /* Validate RC — required unless they have existing RC that isn't being removed */
+    const rcAvailable = hasExistingRC && !rcRemoved;
+    if (!rcFile && !rcAvailable) {
       setRcError("RC document is required. Please upload the vehicle's Registration Certificate.");
       return;
     }
 
     const payload = new FormData();
 
-    /* Append all car fields */
     Object.entries(form).forEach(([key, value]) => {
       if (value !== undefined && value !== null && value !== "") {
         payload.append(key, value);
       }
     });
 
-    /* Append car images */
+    /* Always send keepImages so backend knows exactly which to keep.
+       If keepImages is empty array, backend will remove all existing images. */
+    existingImages.forEach((img) => {
+      const id = img.publicId || img.public_id;
+      if (id) payload.append("keepImages", id);
+    });
+
+    /* If no existing images kept and none removed, send empty marker */
+    if (existingImages.length === 0 && isEditing) {
+      payload.append("keepImages", "__none__");
+    }
+
+    /* Append new image files */
     imageFiles.forEach((file) => payload.append("images", file));
 
-    /* Append RC document if a new one was selected */
-    if (rcFile) {
-      payload.append("rcDocument", rcFile);
-    }
+    if (rcFile) payload.append("rcDocument", rcFile);
+    if (rcRemoved) payload.append("removeRC", "true");
 
     await onSubmit(payload);
   };
@@ -178,15 +195,88 @@ const CarForm = ({
         {/* ── Car Images ── */}
         <div className="field field--full">
           <label htmlFor="images">Car Photos</label>
+
+          {/* ── Existing DB images (only when editing) ── */}
+          {existingImages.length > 0 && (
+            <div style={{ marginBottom: "0.5rem" }}>
+              <span className="field-hint" style={{ marginBottom: "0.4rem", display: "block" }}>
+                Current photos — click ✕ to remove:
+              </span>
+              <div className="img-preview-grid">
+                {existingImages.map((img, idx) => (
+                  <div key={img.publicId || idx} className="img-preview-item">
+                    <img
+                      src={img.url}
+                      alt={`Car photo ${idx + 1}`}
+                      className="img-preview-thumb"
+                    />
+                    <button
+                      type="button"
+                      className="img-preview-delete"
+                      onClick={() => setExistingImages((prev) => prev.filter((_, i) => i !== idx))}
+                      title="Remove this photo"
+                    >
+                      ✕
+                    </button>
+                    {idx === 0 && existingImages.length > 0 && (
+                      <span className="img-preview-main-badge">Main</span>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
           <input
             id="images"
             name="images"
             type="file"
             accept="image/*"
             multiple
-            onChange={(e) => setImageFiles(Array.from(e.target.files || []))}
+            onChange={(e) => {
+              const selected = Array.from(e.target.files || []);
+              const totalAllowed = 8 - existingImages.length;
+              const combined = [...imageFiles, ...selected].slice(0, totalAllowed);
+              setImageFiles(combined);
+              e.target.value = "";
+            }}
           />
-          <span className="field-hint">Upload up to 8 photos. JPG, PNG accepted. Max 5MB each.</span>
+          <span className="field-hint">
+            {existingImages.length > 0
+              ? `${existingImages.length} current photo${existingImages.length !== 1 ? "s" : ""}. You can add up to ${8 - existingImages.length} more.`
+              : "Upload up to 8 photos. JPG, PNG accepted. Max 5MB each."}
+          </span>
+
+          {/* ── New image previews ── */}
+          {imageFiles.length > 0 && (
+            <div style={{ marginTop: "0.5rem" }}>
+              <span className="field-hint" style={{ marginBottom: "0.4rem", display: "block" }}>
+                New photos to upload:
+              </span>
+              <div className="img-preview-grid">
+                {imageFiles.map((file, idx) => (
+                  <div key={idx} className="img-preview-item">
+                    <img
+                      src={URL.createObjectURL(file)}
+                      alt={`New photo ${idx + 1}`}
+                      className="img-preview-thumb"
+                    />
+                    <button
+                      type="button"
+                      className="img-preview-delete"
+                      onClick={() => setImageFiles((prev) => prev.filter((_, i) => i !== idx))}
+                      title="Remove image"
+                    >
+                      ✕
+                    </button>
+                    {idx === 0 && existingImages.length === 0 && (
+                      <span className="img-preview-main-badge">Main</span>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
 
         {/* ── RC Document (highlighted section) ── */}
@@ -204,9 +294,52 @@ const CarForm = ({
                 </p>
               </div>
             </div>
-            {hasExistingRC && !rcFile && (
-              <div className="rc-existing-badge">
-                <span>✓</span> RC on file
+            {hasExistingRC && !rcFile && !rcRemoved && (
+              <div style={{ display: "flex", alignItems: "center", gap: "0.6rem" }}>
+                <div className="rc-existing-badge">
+                  <span>✓</span> RC on file
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setRcRemoved(true);
+                    setRcError("");
+                  }}
+                  style={{
+                    background: "none",
+                    border: "1px solid #e4a0a0",
+                    color: "#c63030",
+                    borderRadius: "8px",
+                    padding: "0.28rem 0.65rem",
+                    fontSize: "0.78rem",
+                    fontWeight: 600,
+                    cursor: "pointer",
+                  }}
+                >
+                  ✕ Remove RC
+                </button>
+              </div>
+            )}
+            {rcRemoved && !rcFile && (
+              <div style={{
+                display: "flex", alignItems: "center", gap: "0.6rem",
+                background: "#fff0f0", border: "1px solid #ffd0d0",
+                borderRadius: "8px", padding: "0.35rem 0.75rem",
+              }}>
+                <span style={{ fontSize: "0.8rem", color: "#c63030", fontWeight: 600 }}>
+                  ⚠ RC will be removed — please upload a new one
+                </span>
+                <button
+                  type="button"
+                  onClick={() => { setRcRemoved(false); setRcError(""); }}
+                  style={{
+                    background: "none", border: "none",
+                    color: "#4c6785", fontSize: "0.78rem",
+                    cursor: "pointer", fontWeight: 600,
+                  }}
+                >
+                  Undo
+                </button>
               </div>
             )}
           </div>
@@ -226,7 +359,9 @@ const CarForm = ({
               <div className="rc-dropzone-placeholder">
                 <div className="rc-upload-icon">⬆</div>
                 <div className="rc-upload-text">
-                  {hasExistingRC
+                  {rcRemoved
+                    ? "Upload new RC document (required)"
+                    : hasExistingRC
                     ? "Upload new RC to replace existing"
                     : "Choose RC file to upload"}
                 </div>

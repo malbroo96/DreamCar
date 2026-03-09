@@ -250,6 +250,34 @@ export const updateCar = async (req, res, next) => {
 
     applyUpdatableFields(car, req.body);
 
+    /* Handle keepImages — frontend sends publicIds of images to KEEP.
+       Any existing image NOT in keepImages gets deleted from Cloudinary. */
+    console.log("keepImages received:", req.body.keepImages);
+    console.log("Car images from DB:", JSON.stringify(car.images, null, 2));
+    if (req.body.keepImages !== undefined) {
+      const keepIds = Array.isArray(req.body.keepImages)
+        ? req.body.keepImages
+        : [req.body.keepImages];
+
+      /* Filter out the __none__ sentinel value */
+      const validKeepIds = keepIds.filter((id) => id !== "__none__");
+
+      /* Find images that were removed — check both publicId and public_id */
+      const removedImages = car.images.filter(
+        (img) => !validKeepIds.includes(img.publicId) && !validKeepIds.includes(img.public_id)
+      );
+
+      /* Delete removed images from Cloudinary */
+      if (removedImages.length > 0) {
+        await destroyImages(removedImages);
+      }
+
+      /* Keep only the images the user wants */
+      car.images = car.images.filter(
+        (img) => validKeepIds.includes(img.publicId) || validKeepIds.includes(img.public_id)
+      );
+    }
+
     /* Append new car images if provided */
     if (req.files?.images?.length) {
       const uploadedImages = await uploadImages(req.files.images);
@@ -258,15 +286,23 @@ export const updateCar = async (req, res, next) => {
 
     /* Replace RC document if a new one is uploaded */
     if (req.files?.rcDocument?.[0]) {
-      /* Delete old RC from Cloudinary first */
       if (car.rcDocument?.publicId) {
         await destroyRCDocument(car.rcDocument);
       }
       car.rcDocument = await uploadRCDocument(req.files.rcDocument[0]);
-      car.rcVerified = false; // reset verification when RC is replaced
+      car.rcVerified = false;
     }
 
-    /* Validate RC is present (required on edit too) */
+    /* Remove RC if user explicitly removed it (and no new one uploaded) */
+    if (req.body.removeRC === "true" && !req.files?.rcDocument?.[0]) {
+      if (car.rcDocument?.publicId) {
+        await destroyRCDocument(car.rcDocument);
+      }
+      car.rcDocument = undefined;
+      car.rcVerified = false;
+    }
+
+    /* Validate RC is present */
     if (!car.rcDocument?.publicId) {
       res.status(400);
       throw new Error("RC document is required. Please upload the vehicle's Registration Certificate.");
