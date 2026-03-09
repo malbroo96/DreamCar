@@ -3,6 +3,8 @@ import http from "http";
 import cors from "cors";
 import dotenv from "dotenv";
 import morgan from "morgan";
+import path from "path";
+import { fileURLToPath } from "url";
 import { Server as SocketIOServer } from "socket.io";
 import { connectDB } from "./config/db.js";
 import carRoutes from "./routes/carRoutes.js";
@@ -13,7 +15,9 @@ import messageRoutes from "./routes/messageRoutes.js";
 import { registerMessageSocketHandlers } from "./socket/messageSocket.js";
 import { errorHandler, notFound } from "./middleware/errorHandler.js";
 
-dotenv.config();
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+dotenv.config({ path: path.join(__dirname, ".env") });
 
 const app = express();
 const server = http.createServer(app);

@@ -41,6 +41,9 @@ ALLOWED_ORIGINS=http://localhost:5173,https://dreamcar-omega.vercel.app
 CLOUDINARY_CLOUD_NAME=
 CLOUDINARY_API_KEY=
 CLOUDINARY_API_SECRET=
+
+# Gemini (RC extraction)
+GEMINI_API_KEY=
 ```
 
 Run backend:

@@ -106,6 +106,77 @@ const destroyImages = async (images = []) => {
   );
 };
 
+const parseJsonFromText = (text = "") => {
+  const trimmed = String(text || "").trim();
+  if (!trimmed) return null;
+  try {
+    return JSON.parse(trimmed);
+  } catch {
+    const start = trimmed.indexOf("{");
+    const end = trimmed.lastIndexOf("}");
+    if (start !== -1 && end !== -1 && end > start) {
+      try {
+        return JSON.parse(trimmed.slice(start, end + 1));
+      } catch {
+        return null;
+      }
+    }
+    return null;
+  }
+};
+
+const normalizeFuelType = (rawValue = "") => {
+  const value = String(rawValue || "").trim().toLowerCase();
+  if (!value) return "";
+  if (value.includes("petrol") || value === "gasoline") return "Petrol";
+  if (value.includes("diesel")) return "Diesel";
+  if (value.includes("electric") || value.includes("ev")) return "Electric";
+  if (value.includes("hybrid")) return "Hybrid";
+  if (value.includes("cng")) return "CNG";
+  if (value.includes("lpg")) return "LPG";
+  return "Other";
+};
+
+const toPositiveInteger = (value) => {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) return "";
+  const intValue = Math.round(parsed);
+  return intValue > 0 ? intValue : "";
+};
+
+const buildRcAutofill = (extracted = {}) => {
+  const brand = String(extracted.brand || "").trim();
+  const model = String(extracted.model || "").trim();
+  const year = toPositiveInteger(extracted.year);
+  const fuelType = normalizeFuelType(extracted.fuelType);
+
+  const locationParts = [String(extracted.city || "").trim(), String(extracted.state || "").trim()].filter(Boolean);
+  const location = locationParts.join(", ");
+
+  const descriptionParts = [
+    "Details extracted from RC book (verify before publishing):",
+    extracted.registrationNumber ? `Registration No: ${extracted.registrationNumber}` : "",
+    extracted.registrationDate ? `Registration Date: ${extracted.registrationDate}` : "",
+    extracted.ownerName ? `Owner Name: ${extracted.ownerName}` : "",
+    extracted.vehicleClass ? `Vehicle Class: ${extracted.vehicleClass}` : "",
+    extracted.engineNumber ? `Engine No: ${extracted.engineNumber}` : "",
+    extracted.chassisNumber ? `Chassis No: ${extracted.chassisNumber}` : "",
+    extracted.color ? `Color: ${extracted.color}` : "",
+  ]
+    .filter(Boolean)
+    .join("\n");
+
+  return {
+    title: [year, brand, model].filter(Boolean).join(" ").trim(),
+    brand,
+    model,
+    year,
+    fuelType,
+    location,
+    description: descriptionParts,
+  };
+};
+
 export const getCars = async (req, res, next) => {
   try {
     const filters = buildFilters(req.query);
@@ -160,6 +231,125 @@ export const createCar = async (req, res, next) => {
     res.status(201).json(car);
   } catch (error) {
     next(error);
+  }
+};
+
+export const extractCarFromRc = async (req, res, next) => {
+  try {
+    const geminiApiKey = process.env.GEMINI_API_KEY;
+    if (!geminiApiKey) {
+      res.status(500);
+      throw new Error("GEMINI_API_KEY is not configured");
+    }
+
+    if (!req.file) {
+      res.status(400);
+      throw new Error("RC book image is required");
+    }
+
+    const prompt = `You are an RC (Registration Certificate) OCR parser for Indian vehicles.
+Read the uploaded RC book image and return ONLY valid JSON with this exact shape:
+{
+  "isRcBook": boolean,
+  "registrationNumber": string,
+  "ownerName": string,
+  "brand": string,
+  "model": string,
+  "year": number,
+  "fuelType": string,
+  "registrationDate": string,
+  "engineNumber": string,
+  "chassisNumber": string,
+  "vehicleClass": string,
+  "color": string,
+  "city": string,
+  "state": string,
+  "confidence": number,
+  "notes": string
+}
+Rules:
+- If a field is missing, use empty string for text fields, 0 for year/confidence, and false for isRcBook.
+- Do not include markdown, code blocks, or extra keys.
+- Try to infer brand/model correctly from RC data.`;
+
+    const geminiResponse = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${geminiApiKey}`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          contents: [
+            {
+              parts: [
+                { text: prompt },
+                {
+                  inline_data: {
+                    mime_type: req.file.mimetype,
+                    data: req.file.buffer.toString("base64"),
+                  },
+                },
+              ],
+            },
+          ],
+          generationConfig: {
+            temperature: 0.1,
+            responseMimeType: "application/json",
+          },
+        }),
+      }
+    );
+
+    if (!geminiResponse.ok) {
+      const errorBody = await geminiResponse.text();
+      res.status(502);
+      throw new Error(`Gemini request failed: ${errorBody || geminiResponse.statusText}`);
+    }
+
+    const data = await geminiResponse.json();
+    const text = data?.candidates?.[0]?.content?.parts?.map((part) => part.text).filter(Boolean).join("\n") || "";
+    const extracted = parseJsonFromText(text);
+
+    if (!extracted) {
+      res.status(502);
+      throw new Error("Unable to parse Gemini RC extraction response");
+    }
+
+    const autoFill = buildRcAutofill(extracted);
+
+    res.json({
+      verified: Boolean(extracted.isRcBook),
+      confidence: Number(extracted.confidence || 0),
+      extracted,
+      autoFill,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const getRcExtractionHealth = async (req, res, next) => {
+  try {
+    const geminiApiKey = process.env.GEMINI_API_KEY;
+    if (!geminiApiKey) {
+      return res.status(200).json({ connected: false, message: "GEMINI_API_KEY is not configured" });
+    }
+
+    const probe = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models?key=${geminiApiKey}`,
+      { method: "GET" }
+    );
+
+    if (!probe.ok) {
+      const errorBody = await probe.text();
+      return res.status(200).json({
+        connected: false,
+        message: `Gemini request failed: ${errorBody || probe.statusText}`,
+      });
+    }
+
+    return res.status(200).json({ connected: true, message: "Gemini is connected" });
+  } catch (error) {
+    return next(error);
   }
 };
 
