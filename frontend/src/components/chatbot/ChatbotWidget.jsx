@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import api from "../../services/api";
 import "./ChatbotWidget.css";
 
 // System prompt lives on the backend (routes/chatbot.js) — not here.
@@ -72,24 +73,10 @@ const ChatbotWidget = () => {
 
     try {
       // ── Calls your own backend, which holds the API key securely ──
-      const token = localStorage.getItem("dreamcar_auth_token");
-      const response = await fetch("/api/chat/support", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        },
-        body: JSON.stringify({
+      const response = await api.post("/chat/support", {
           messages: [...history, { role: "user", content: userText.trim() }],
-        }),
       });
-
-      if (!response.ok) {
-        const errData = await response.json().catch(() => ({}));
-        throw new Error(errData.message || `Request failed (${response.status})`);
-      }
-
-      const data = await response.json();
+      const data = response.data;
       const replyText =
         data.content
           ?.filter((b) => b.type === "text")
@@ -105,7 +92,7 @@ const ChatbotWidget = () => {
       setMessages((prev) => [...prev, botMsg]);
     } catch (err) {
       console.error("Chatbot error:", err);
-      setError("Something went wrong. Please try again.");
+      setError(err.response?.data?.message || err.message || "Something went wrong. Please try again.");
     } finally {
       setLoading(false);
     }
