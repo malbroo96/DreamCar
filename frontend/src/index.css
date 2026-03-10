@@ -13,6 +13,7 @@ body {
   margin: 0;
   min-width: 320px;
   background: radial-gradient(circle at top, #e7efff, #f4f7fb 40%);
+  overflow-x: hidden;
 }
 
 a {
@@ -26,7 +27,7 @@ img {
 }
 
 .container {
-  width: min(1100px, 92vw);
+  width: min(1160px, calc(100vw - 2.5rem));
   margin: 0 auto;
 }
 
@@ -43,6 +44,7 @@ img {
   padding: 0.7rem 1rem;
   cursor: pointer;
   font-weight: 600;
+  min-height: 42px;
 }
 
 .btn-primary {
@@ -83,4 +85,73 @@ label {
 .field {
   display: grid;
   gap: 0.35rem;
+}
+
+.reveal-on-scroll {
+  opacity: 0;
+  transform: translateY(16px) scale(0.99);
+  filter: blur(2px);
+  transition:
+    opacity 0.5s ease,
+    transform 0.55s cubic-bezier(0.21, 0.98, 0.35, 1),
+    filter 0.5s ease;
+  transition-delay: var(--reveal-delay, 0ms);
+  will-change: opacity, transform;
+}
+
+.reveal-on-scroll.is-visible {
+  opacity: 1;
+  transform: translateY(0) scale(1);
+  filter: blur(0);
+}
+
+@media (max-width: 1024px) {
+  .container {
+    width: min(1160px, calc(100vw - 2rem));
+  }
+}
+
+@media (max-width: 768px) {
+  :root {
+    line-height: 1.35;
+  }
+
+  .container {
+    width: calc(100vw - 1.4rem);
+  }
+
+  .card {
+    border-radius: 10px;
+  }
+
+  .btn {
+    min-height: 40px;
+    padding: 0.62rem 0.88rem;
+  }
+
+  input,
+  select,
+  textarea {
+    padding: 0.6rem 0.68rem;
+    border-radius: 9px;
+  }
+}
+
+@media (max-width: 480px) {
+  .container {
+    width: calc(100vw - 1rem);
+  }
+
+  .grid {
+    gap: 0.75rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .reveal-on-scroll {
+    opacity: 1;
+    transform: none;
+    filter: none;
+    transition: none;
+  }
 }

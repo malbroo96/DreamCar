@@ -1,24 +1,22 @@
-/* ═══════════════════════════════════════════════
-   App.css — DreamCar Global Layout & Navigation
-═══════════════════════════════════════════════ */
-
 .app-shell {
   min-height: 100vh;
   display: flex;
   flex-direction: column;
 }
 
-/* ══════════════════════════════════════════
-   TOPBAR
-══════════════════════════════════════════ */
+.app-content-wrapper {
+  position: relative;
+  z-index: 1;
+}
+
 .topbar {
   background: #0c1f36;
   color: #fff;
-  border-bottom: 1px solid rgba(255,255,255,0.06);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
   position: sticky;
   top: 0;
   z-index: 100;
-  box-shadow: 0 2px 16px rgba(0,0,0,0.18);
+  box-shadow: 0 2px 16px rgba(0, 0, 0, 0.18);
 }
 
 .topbar-inner {
@@ -29,7 +27,6 @@
   gap: 1rem;
 }
 
-/* Brand */
 .brand {
   display: inline-flex;
   align-items: center;
@@ -41,10 +38,15 @@
   text-decoration: none;
   flex-shrink: 0;
 }
-.brand-icon { font-size: 1.1rem; }
-.brand:hover { color: #7dc4ff; }
 
-/* Hamburger (hidden on desktop) */
+.brand-icon {
+  font-size: 1.1rem;
+}
+
+.brand:hover {
+  color: #7dc4ff;
+}
+
 .nav-hamburger {
   display: none;
   flex-direction: column;
@@ -53,12 +55,13 @@
   width: 36px;
   height: 36px;
   padding: 0.4rem;
-  background: rgba(255,255,255,0.08);
-  border: 1px solid rgba(255,255,255,0.1);
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 8px;
   cursor: pointer;
   flex-shrink: 0;
 }
+
 .nav-hamburger span {
   display: block;
   width: 100%;
@@ -68,7 +71,6 @@
   transition: all 0.2s;
 }
 
-/* Nav links */
 .nav-links {
   display: flex;
   align-items: center;
@@ -86,10 +88,17 @@
   transition: all 0.2s;
   white-space: nowrap;
 }
-.nav-links a:hover { color: #fff; background: rgba(255,255,255,0.08); }
-.nav-links a.active { color: #fff; background: rgba(255,255,255,0.1); }
 
-/* Sell car CTA */
+.nav-links a:hover {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.nav-links a.active {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.1);
+}
+
 .nav-sell-link {
   background: #0b6ef3 !important;
   color: #fff !important;
@@ -98,16 +107,19 @@
   font-weight: 700 !important;
   transition: background 0.2s !important;
 }
-.nav-sell-link:hover { background: #0955c8 !important; }
-.nav-sell-link.active { background: #0955c8 !important; }
 
-/* Messages link with badge */
+.nav-sell-link:hover,
+.nav-sell-link.active {
+  background: #0955c8 !important;
+}
+
 .nav-messages-link {
   position: relative;
   display: inline-flex !important;
   align-items: center;
   gap: 0.3rem;
 }
+
 .nav-badge {
   background: #ef4444;
   color: #fff;
@@ -118,30 +130,37 @@
   min-width: 18px;
   text-align: center;
   line-height: 1.4;
-  animation: badgePop 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
-}
-@keyframes badgePop {
-  from { transform: scale(0); }
-  to   { transform: scale(1); }
+  animation: badge-pop 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
-/* Profile link with avatar */
+@keyframes badge-pop {
+  from {
+    transform: scale(0);
+  }
+
+  to {
+    transform: scale(1);
+  }
+}
+
 .nav-profile-link {
   display: inline-flex !important;
   align-items: center;
   gap: 0.45rem;
 }
+
 .nav-avatar {
   width: 26px;
   height: 26px;
   border-radius: 50%;
   object-fit: cover;
-  border: 1.5px solid rgba(255,255,255,0.3);
+  border: 1.5px solid rgba(255, 255, 255, 0.3);
   display: inline-flex;
   align-items: center;
   justify-content: center;
   vertical-align: middle;
 }
+
 .nav-avatar--initials {
   background: linear-gradient(135deg, #0b6ef3, #1a9bfc);
   color: #fff;
@@ -150,35 +169,29 @@
   flex-shrink: 0;
 }
 
-/* Logout button */
 .btn-logout {
   font-size: 0.85rem !important;
   padding: 0.45rem 0.85rem !important;
   border-radius: 8px !important;
-  background: rgba(255,255,255,0.08) !important;
+  background: rgba(255, 255, 255, 0.08) !important;
   color: #a8c4e0 !important;
-  border: 1px solid rgba(255,255,255,0.1) !important;
+  border: 1px solid rgba(255, 255, 255, 0.1) !important;
   font-weight: 600 !important;
   transition: all 0.2s !important;
   white-space: nowrap;
 }
+
 .btn-logout:hover {
   background: rgba(239, 68, 68, 0.15) !important;
   color: #fca5a5 !important;
-  border-color: rgba(239,68,68,0.3) !important;
+  border-color: rgba(239, 68, 68, 0.3) !important;
 }
 
-/* ══════════════════════════════════════════
-   MAIN CONTENT
-══════════════════════════════════════════ */
 .content-area {
-  padding: 1.5rem 0 2.5rem;
+  padding: clamp(1rem, 2vw, 1.5rem) 0 clamp(1.5rem, 3vw, 2.5rem);
   flex: 1;
 }
 
-/* ══════════════════════════════════════════
-   SHARED LAYOUT HELPERS
-══════════════════════════════════════════ */
 .section-header {
   display: flex;
   align-items: center;
@@ -191,9 +204,39 @@
   grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
 }
 
-/* ══════════════════════════════════════════
-   RESPONSIVE
-══════════════════════════════════════════ */
+@media (max-width: 1024px) {
+  .topbar-inner {
+    gap: 0.7rem;
+  }
+
+  .brand {
+    font-size: 1.1rem;
+  }
+
+  .nav-links {
+    gap: 0.2rem;
+  }
+
+  .nav-links a {
+    font-size: 0.83rem;
+    padding: 0.4rem 0.62rem;
+  }
+
+  .btn-logout {
+    font-size: 0.8rem !important;
+    padding: 0.4rem 0.75rem !important;
+  }
+
+  .section-header {
+    gap: 0.6rem;
+    flex-wrap: wrap;
+  }
+
+  .car-grid {
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  }
+}
+
 @media (max-width: 768px) {
   .nav-hamburger {
     display: flex;
@@ -206,12 +249,12 @@
     left: 0;
     right: 0;
     background: #0c1f36;
-    border-top: 1px solid rgba(255,255,255,0.08);
+    border-top: 1px solid rgba(255, 255, 255, 0.08);
     flex-direction: column;
     align-items: stretch;
     gap: 0;
     padding: 0.5rem;
-    box-shadow: 0 8px 20px rgba(0,0,0,0.25);
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.25);
   }
 
   .nav-links--open {
@@ -227,10 +270,43 @@
     justify-content: flex-start;
   }
 
-  .nav-sell-link { text-align: center !important; justify-content: center !important; }
+  .nav-sell-link {
+    text-align: center !important;
+    justify-content: center !important;
+  }
 
   .topbar-inner {
     position: relative;
     flex-wrap: nowrap;
+  }
+
+  .brand {
+    font-size: 1rem;
+  }
+
+  .content-area {
+    padding-top: 1rem;
+  }
+
+  .car-grid {
+    grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
+    gap: 0.75rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .topbar-inner {
+    padding: 0.7rem 0;
+  }
+
+  .brand {
+    max-width: 66vw;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .car-grid {
+    grid-template-columns: 1fr;
   }
 }
