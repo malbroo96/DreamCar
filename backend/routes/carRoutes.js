@@ -2,22 +2,32 @@ import express from "express";
 import {
   createCar,
   deleteCar,
-  extractCarFromRc,
-  getRcExtractionHealth,
+  extractCarFromRC,
   getCarById,
   getCars,
   updateCar,
+  getRCDocumentUrl,
+  verifyRCDocument,
 } from "../controllers/carController.js";
-import { upload, uploadRc } from "../middleware/upload.js";
-import { protect } from "../middleware/auth.js";
+import { uploadCarFilesFiltered, uploadRC } from "../middleware/upload.js";
+import { protect, adminOnly } from "../middleware/auth.js";
 
 const router = express.Router();
 
 router.use(protect);
+router.post("/rc-extract", uploadRC.single("rcDocument"), extractCarFromRC);
 
-router.get("/rc-health", getRcExtractionHealth);
-router.post("/rc-extract", uploadRc.single("rcBook"), extractCarFromRc);
-router.route("/").get(getCars).post(upload.array("images", 8), createCar);
-router.route("/:id").get(getCarById).put(upload.array("images", 8), updateCar).delete(deleteCar);
+router.route("/")
+  .get(getCars)
+  .post(uploadCarFilesFiltered, createCar);
+
+router.route("/:id")
+  .get(getCarById)
+  .put(uploadCarFilesFiltered, updateCar)
+  .delete(deleteCar);
+
+/* ── RC Document endpoints ── */
+router.get("/:id/rc-url", getRCDocumentUrl);               // owner or admin: get signed URL
+router.patch("/:id/rc-verify", adminOnly, verifyRCDocument); // admin only: mark as verified
 
 export default router;

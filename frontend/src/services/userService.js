@@ -14,3 +14,9 @@ export const searchUsers = async (query) => {
   const response = await api.get("/users/search", { params: { q: query } });
   return response.data;
 };
+
+/* Public dealer profile — returns dealer info + their listings */
+export const getPublicProfile = async (dealerId) => {
+  const response = await api.get(`/users/${dealerId}/profile`);
+  return response.data;
+};

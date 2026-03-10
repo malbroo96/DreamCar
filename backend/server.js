@@ -1,7 +1,8 @@
+import "dotenv/config"; 
+
 import express from "express";
 import http from "http";
 import cors from "cors";
-import dotenv from "dotenv";
 import morgan from "morgan";
 import path from "path";
 import { fileURLToPath } from "url";
@@ -12,12 +13,10 @@ import adminRoutes from "./routes/adminRoutes.js";
 import authRoutes from "./routes/authRoutes.js";
 import userRoutes from "./routes/userRoutes.js";
 import messageRoutes from "./routes/messageRoutes.js";
+import aiRoutes from "./routes/aiRoutes.js";
 import { registerMessageSocketHandlers } from "./socket/messageSocket.js";
 import { errorHandler, notFound } from "./middleware/errorHandler.js";
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-dotenv.config({ path: path.join(__dirname, ".env") });
+import chatbotRouter from "./routes/chatbot.js";
 
 const app = express();
 const server = http.createServer(app);
@@ -44,6 +43,7 @@ app.use(
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(morgan("dev"));
+app.use("/api/chat", chatbotRouter);
 
 app.get("/api/health", (req, res) => {
   res.json({ ok: true, service: "dreamcar-backend" });
@@ -54,6 +54,7 @@ app.use("/api/admin", adminRoutes);
 app.use("/api/auth", authRoutes);
 app.use("/api/users", userRoutes);
 app.use("/api/messages", messageRoutes);
+app.use("/api/ai", aiRoutes);
 
 app.use(notFound);
 app.use(errorHandler);

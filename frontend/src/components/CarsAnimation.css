@@ -1,0 +1,47 @@
+/* ═══════════════════════════════════════════════
+   CarsAnimation.css — Background car animations
+═══════════════════════════════════════════════ */
+
+.cars-animation-layer {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  overflow: hidden;
+}
+
+/* ── Each car track ── */
+.car-track {
+  position: absolute;
+  animation-timing-function: linear;
+  animation-iteration-count: infinite;
+  animation-fill-mode: both;
+}
+
+/* Left to right */
+.car-track--ltr {
+  animation-name: drive-ltr;
+  transform-origin: center center;
+}
+
+/* Right to left — flip the car horizontally */
+.car-track--rtl {
+  animation-name: drive-rtl;
+  transform: scaleX(-1);
+}
+
+@keyframes drive-ltr {
+  0%   { left: -160px; }
+  100% { left: calc(100vw + 160px); }
+}
+
+@keyframes drive-rtl {
+  0%   { left: calc(100vw + 160px); }
+  100% { left: -160px; }
+}
+
+/* Make sure page content sits above the animation */
+.app-content-wrapper {
+  position: relative;
+  z-index: 1;
+}

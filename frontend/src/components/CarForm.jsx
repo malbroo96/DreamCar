@@ -1,80 +1,179 @@
-import { useEffect, useMemo, useState } from "react";
-import { extractCarFromRc, getRcExtractionHealth } from "../services/carService";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { extractCarFromRC } from "../services/carService";
+import "./CarForm.css";
 
 const defaultFormState = {
   title: "",
   brand: "",
   model: "",
   year: "",
-  price: "",
+  price: "0",
   fuelType: "Petrol",
   transmission: "Manual",
-  kilometersDriven: "",
-  description: "",
+  kilometersDriven: "0",
+  description: "Details extracted from RC document.",
   location: "",
   status: "approved",
 };
 
-const photoViews = [
-  { key: "frontView", label: "Front View" },
-  { key: "rightView", label: "Right View" },
-  { key: "leftView", label: "Left View" },
-  { key: "backView", label: "Back View" },
-  { key: "frontSeat", label: "Front Seat" },
-  { key: "rearSeat", label: "Rear Seat" },
-  { key: "meterBoard", label: "Meter Board" },
-];
+const defaultRcDetails = {
+  registrationNumber: "",
+  ownerName: "",
+  manufacturer: "",
+  vehicleModel: "",
+  fuelType: "",
+  manufacturingYear: "",
+  engineNumber: "",
+  chassisNumber: "",
+  vehicleColor: "",
+  seatingCapacity: "",
+  registrationDate: "",
+  rtoOffice: "",
+};
 
-const CarForm = ({ initialValues, onSubmit, submitLabel = "Submit", includeStatus = false, enableRcAutofill = false }) => {
+const RC_ACCEPTED = ".pdf,.jpg,.jpeg,.png";
+const RC_MAX_MB = 5;
+const RC_MAX_BYTES = RC_MAX_MB * 1024 * 1024;
+const RC_ALLOWED_TYPES = ["application/pdf", "image/jpeg", "image/jpg", "image/png"];
+
+const CarForm = ({
+  initialValues,
+  onSubmit,
+  submitLabel = "Submit",
+  includeStatus = false,
+  hasExistingRC = false,
+  manualEntryEnabled = true,
+}) => {
   const mergedInitialValues = useMemo(
     () => ({ ...defaultFormState, ...(initialValues || {}) }),
     [initialValues]
   );
 
   const [form, setForm] = useState(mergedInitialValues);
-  const [viewFiles, setViewFiles] = useState({});
-  const [currentPhotoStep, setCurrentPhotoStep] = useState(0);
+  const [imageFiles, setImageFiles] = useState([]);
+  const [existingImages, setExistingImages] = useState(() => initialValues?.images || []);
+
   const [rcFile, setRcFile] = useState(null);
-  const [aiLoading, setAiLoading] = useState(false);
-  const [aiError, setAiError] = useState("");
-  const [aiSuccess, setAiSuccess] = useState("");
-  const [healthLoading, setHealthLoading] = useState(false);
-  const [geminiHealth, setGeminiHealth] = useState({ connected: false, message: "Checking Gemini connection..." });
+  const [rcRemoved, setRcRemoved] = useState(false);
+  const [rcError, setRcError] = useState("");
+  const [rcPreview, setRcPreview] = useState(null);
+  const [rcExtracting, setRcExtracting] = useState(false);
+  const [rcExtractMessage, setRcExtractMessage] = useState("");
+  const [rcDetails, setRcDetails] = useState(() => ({ ...defaultRcDetails, ...(initialValues?.rcDetails || {}) }));
+  const rcInputRef = useRef(null);
+
+  const isEditing = Boolean(initialValues);
 
   useEffect(() => {
     setForm(mergedInitialValues);
-  }, [mergedInitialValues]);
+    setExistingImages(initialValues?.images || []);
+    setRcDetails({ ...defaultRcDetails, ...(initialValues?.rcDetails || {}) });
+    setImageFiles([]);
+    setRcFile(null);
+    setRcRemoved(false);
+    setRcError("");
+    setRcExtractMessage("");
+    setRcPreview(null);
+  }, [mergedInitialValues, initialValues]);
 
-  useEffect(() => {
-    if (!enableRcAutofill) return;
-    const checkHealth = async () => {
-      try {
-        setHealthLoading(true);
-        const data = await getRcExtractionHealth();
-        setGeminiHealth({
-          connected: Boolean(data?.connected),
-          message: data?.message || (data?.connected ? "Gemini is connected" : "Gemini is not connected"),
-        });
-      } catch (err) {
-        setGeminiHealth({
-          connected: false,
-          message: err.response?.data?.message || "Failed to check Gemini connection",
-        });
-      } finally {
-        setHealthLoading(false);
-      }
-    };
-
-    checkHealth();
-  }, [enableRcAutofill]);
-
-  const handleChange = (event) => {
-    const { name, value } = event.target;
+  const handleChange = (e) => {
+    const { name, value } = e.target;
     setForm((prev) => ({ ...prev, [name]: value }));
   };
 
-  const handleSubmit = async (event) => {
-    event.preventDefault();
+  const handleRcDetailsChange = (e) => {
+    const { name, value } = e.target;
+    setRcDetails((prev) => ({ ...prev, [name]: value }));
+  };
+
+  const handleRCChange = (e) => {
+    const file = e.target.files?.[0];
+    setRcError("");
+    setRcPreview(null);
+    setRcExtractMessage("");
+
+    if (!file) {
+      setRcFile(null);
+      return;
+    }
+
+    if (!RC_ALLOWED_TYPES.includes(file.type)) {
+      setRcError("Only PDF, JPG, or PNG files are accepted for RC document.");
+      setRcFile(null);
+      if (rcInputRef.current) rcInputRef.current.value = "";
+      return;
+    }
+
+    if (file.size > RC_MAX_BYTES) {
+      setRcError(`RC document must be smaller than ${RC_MAX_MB}MB. Your file is ${(file.size / 1024 / 1024).toFixed(1)}MB.`);
+      setRcFile(null);
+      if (rcInputRef.current) rcInputRef.current.value = "";
+      return;
+    }
+
+    setRcFile(file);
+
+    if (file.type.startsWith("image/")) {
+      const reader = new FileReader();
+      reader.onload = (ev) => setRcPreview(ev.target.result);
+      reader.readAsDataURL(file);
+    } else {
+      setRcPreview("pdf");
+    }
+  };
+
+  const handleExtractFromRC = async () => {
+    if (!rcFile) {
+      setRcError("Please upload RC document first, then extract details.");
+      return;
+    }
+
+    try {
+      setRcExtracting(true);
+      setRcExtractMessage("");
+      setRcError("");
+
+      const extracted = await extractCarFromRC(rcFile);
+      const autoFill = extracted?.autoFill || {};
+      const nextRcDetails = extracted?.rcDetails || {};
+
+      setForm((prev) => ({
+        ...prev,
+        title: autoFill.title || prev.title,
+        brand: autoFill.brand || prev.brand,
+        model: autoFill.model || prev.model,
+        year: autoFill.year || prev.year,
+        fuelType: autoFill.fuelType || prev.fuelType,
+        location: autoFill.location || prev.location,
+      }));
+
+      setRcDetails((prev) => ({ ...prev, ...nextRcDetails }));
+      setRcExtractMessage("RC details extracted. Please verify and edit if needed before publishing.");
+    } catch (err) {
+      setRcError(err.response?.data?.message || err.message || "Failed to extract RC details");
+    } finally {
+      setRcExtracting(false);
+    }
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+
+    const rcAvailable = hasExistingRC && !rcRemoved;
+    if (!rcFile && !rcAvailable) {
+      setRcError("RC document is required. Please upload the vehicle Registration Certificate.");
+      return;
+    }
+
+    if (!manualEntryEnabled) {
+      const missingAutoFields = ["title", "brand", "model", "year", "fuelType", "location"].filter(
+        (field) => !String(form[field] || "").trim()
+      );
+      if (missingAutoFields.length) {
+        setRcError("Please extract RC details first so required vehicle fields are auto-filled.");
+        return;
+      }
+    }
 
     const payload = new FormData();
     Object.entries(form).forEach(([key, value]) => {
@@ -83,263 +182,329 @@ const CarForm = ({ initialValues, onSubmit, submitLabel = "Submit", includeStatu
       }
     });
 
-    photoViews.forEach((view) => {
-      const file = viewFiles[view.key];
-      if (!file) return;
-      payload.append("images", file);
-      payload.append("imageLabels", view.label);
+    existingImages.forEach((img) => {
+      const id = img.publicId || img.public_id;
+      if (id) payload.append("keepImages", id);
     });
+
+    if (existingImages.length === 0 && isEditing) {
+      payload.append("keepImages", "__none__");
+    }
+
+    imageFiles.forEach((file) => payload.append("images", file));
+
+    if (rcFile) payload.append("rcDocument", rcFile);
+    if (rcRemoved) payload.append("removeRC", "true");
+    payload.append("rcDetails", JSON.stringify(rcDetails));
+
     await onSubmit(payload);
   };
 
-  const handlePhotoSelect = (viewKey, file) => {
-    setViewFiles((prev) => ({
-      ...prev,
-      [viewKey]: file || null,
-    }));
+  const carPhotosSection = (
+    <div className="field field--full">
+      <label htmlFor="images">Car Photos</label>
 
-    if (file && currentPhotoStep < photoViews.length - 1) {
-      setCurrentPhotoStep((prev) => Math.min(prev + 1, photoViews.length - 1));
-    }
-  };
+      {existingImages.length > 0 && (
+        <div style={{ marginBottom: "0.5rem" }}>
+          <span className="field-hint" style={{ marginBottom: "0.4rem", display: "block" }}>
+            Current photos - click x to remove:
+          </span>
+          <div className="img-preview-grid">
+            {existingImages.map((img, idx) => (
+              <div key={img.publicId || idx} className="img-preview-item">
+                <img src={img.url} alt={`Car photo ${idx + 1}`} className="img-preview-thumb" />
+                <button
+                  type="button"
+                  className="img-preview-delete"
+                  onClick={() => setExistingImages((prev) => prev.filter((_, i) => i !== idx))}
+                  title="Remove this photo"
+                >
+                  x
+                </button>
+                {idx === 0 && existingImages.length > 0 ? <span className="img-preview-main-badge">Main</span> : null}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
-  const handleRcExtract = async () => {
-    if (!rcFile) {
-      setAiError("Please upload an RC book image first.");
-      return;
-    }
+      <input
+        id="images"
+        name="images"
+        type="file"
+        accept="image/*"
+        multiple
+        onChange={(e) => {
+          const selected = Array.from(e.target.files || []);
+          const totalAllowed = 8 - existingImages.length;
+          const combined = [...imageFiles, ...selected].slice(0, totalAllowed);
+          setImageFiles(combined);
+          e.target.value = "";
+        }}
+      />
+      <span className="field-hint">
+        {existingImages.length > 0
+          ? `${existingImages.length} current photo${existingImages.length !== 1 ? "s" : ""}. You can add up to ${8 - existingImages.length} more.`
+          : "Upload up to 8 photos. JPG, PNG accepted. Max 5MB each."}
+      </span>
 
-    try {
-      setAiLoading(true);
-      setAiError("");
-      setAiSuccess("");
-
-      const result = await extractCarFromRc(rcFile);
-      const autoFill = result?.autoFill || {};
-      const fieldsToUpdate = Object.fromEntries(
-        Object.entries(autoFill).filter(([, value]) => value !== undefined && value !== null && value !== "")
-      );
-
-      setForm((prev) => ({ ...prev, ...fieldsToUpdate }));
-
-      const confidence = Number(result?.confidence || 0);
-      const verifiedText = result?.verified ? "RC verified" : "Could not fully verify RC";
-      setAiSuccess(`${verifiedText}. Confidence: ${confidence}%`);
-    } catch (err) {
-      setAiError(err.response?.data?.message || "Failed to extract RC details");
-    } finally {
-      setAiLoading(false);
-    }
-  };
-
-  const uploadedCount = photoViews.reduce((count, view) => (viewFiles[view.key] ? count + 1 : count), 0);
-  const currentPhotoView = photoViews[currentPhotoStep];
+      {imageFiles.length > 0 && (
+        <div style={{ marginTop: "0.5rem" }}>
+          <span className="field-hint" style={{ marginBottom: "0.4rem", display: "block" }}>
+            New photos to upload:
+          </span>
+          <div className="img-preview-grid">
+            {imageFiles.map((file, idx) => (
+              <div key={`${file.name}-${idx}`} className="img-preview-item">
+                <img src={URL.createObjectURL(file)} alt={`New photo ${idx + 1}`} className="img-preview-thumb" />
+                <button
+                  type="button"
+                  className="img-preview-delete"
+                  onClick={() => setImageFiles((prev) => prev.filter((_, i) => i !== idx))}
+                  title="Remove image"
+                >
+                  x
+                </button>
+                {idx === 0 && existingImages.length === 0 ? <span className="img-preview-main-badge">Main</span> : null}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
 
   return (
-    <form onSubmit={handleSubmit} className="card" style={{ padding: "1rem" }}>
-      {enableRcAutofill ? (
-        <div
-          style={{
-            marginBottom: "1rem",
-            border: "1px solid #d7e2f0",
-            borderRadius: 12,
-            padding: "0.85rem",
-            background: "#f8fbff",
-          }}
-        >
-          <h3 style={{ marginTop: 0, marginBottom: "0.5rem" }}>RC Book Auto Fill (Gemini AI)</h3>
-          <p style={{ marginTop: 0, color: "#4c6785" }}>
-            Upload RC image or PDF to extract vehicle details and auto-fill the form.
-          </p>
-          <div style={{ marginBottom: "0.65rem", display: "flex", gap: "0.5rem", alignItems: "center", flexWrap: "wrap" }}>
-            <p style={{ margin: 0, color: geminiHealth.connected ? "#177245" : "#c63030" }}>
-              {healthLoading ? "Checking Gemini connection..." : geminiHealth.message}
+    <form onSubmit={handleSubmit} className="car-form card">
+      <div className="car-form-grid">
+        {manualEntryEnabled ? (
+          <>
+            <div className="field">
+              <label htmlFor="title">Title *</label>
+              <input id="title" name="title" value={form.title} onChange={handleChange} required />
+            </div>
+            <div className="field">
+              <label htmlFor="brand">Brand *</label>
+              <input id="brand" name="brand" value={form.brand} onChange={handleChange} required />
+            </div>
+            <div className="field">
+              <label htmlFor="model">Model *</label>
+              <input id="model" name="model" value={form.model} onChange={handleChange} required />
+            </div>
+            <div className="field">
+              <label htmlFor="year">Year *</label>
+              <input id="year" name="year" type="number" min="1990" max={new Date().getFullYear() + 1} value={form.year} onChange={handleChange} required />
+            </div>
+            <div className="field">
+              <label htmlFor="price">Price (INR) *</label>
+              <input id="price" name="price" type="number" min="0" value={form.price} onChange={handleChange} required />
+            </div>
+            <div className="field">
+              <label htmlFor="fuelType">Fuel Type *</label>
+              <select id="fuelType" name="fuelType" value={form.fuelType} onChange={handleChange}>
+                <option value="Petrol">Petrol</option>
+                <option value="Diesel">Diesel</option>
+                <option value="Electric">Electric</option>
+                <option value="Hybrid">Hybrid</option>
+                <option value="CNG">CNG</option>
+                <option value="LPG">LPG</option>
+                <option value="Other">Other</option>
+              </select>
+            </div>
+            <div className="field">
+              <label htmlFor="transmission">Transmission *</label>
+              <select id="transmission" name="transmission" value={form.transmission} onChange={handleChange}>
+                <option value="Manual">Manual</option>
+                <option value="Automatic">Automatic</option>
+                <option value="CVT">CVT</option>
+                <option value="AMT">AMT</option>
+                <option value="Other">Other</option>
+              </select>
+            </div>
+            <div className="field">
+              <label htmlFor="kilometersDriven">Kilometers Driven *</label>
+              <input id="kilometersDriven" name="kilometersDriven" type="number" min="0" value={form.kilometersDriven} onChange={handleChange} required />
+            </div>
+            <div className="field">
+              <label htmlFor="location">Location *</label>
+              <input id="location" name="location" value={form.location} onChange={handleChange} required />
+            </div>
+            <div className="field field--full">
+              <label htmlFor="description">Description *</label>
+              <textarea id="description" name="description" rows="4" value={form.description} onChange={handleChange} required />
+            </div>
+          </>
+        ) : (
+          <div className="field field--full">
+            <p style={{ margin: 0, color: "#4c6785" }}>
+              Basic car fields are auto-filled from RC extraction in Sell Car mode.
             </p>
-            <button
-              type="button"
-              className="btn btn-secondary"
-              onClick={async () => {
-                try {
-                  setHealthLoading(true);
-                  const data = await getRcExtractionHealth();
-                  setGeminiHealth({
-                    connected: Boolean(data?.connected),
-                    message: data?.message || (data?.connected ? "Gemini is connected" : "Gemini is not connected"),
-                  });
-                } catch (err) {
-                  setGeminiHealth({
-                    connected: false,
-                    message: err.response?.data?.message || "Failed to check Gemini connection",
-                  });
-                } finally {
-                  setHealthLoading(false);
-                }
-              }}
-              disabled={healthLoading}
-            >
-              {healthLoading ? "Checking..." : "Recheck"}
-            </button>
           </div>
-          <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap", alignItems: "center" }}>
-            <input type="file" accept="image/*,.pdf,application/pdf" onChange={(event) => setRcFile(event.target.files?.[0] || null)} />
-            <button type="button" className="btn btn-secondary" onClick={handleRcExtract} disabled={aiLoading}>
-              {aiLoading ? "Extracting..." : "Extract From RC"}
-            </button>
-          </div>
-          {aiError ? <p style={{ marginBottom: 0, color: "#c63030" }}>{aiError}</p> : null}
-          {aiSuccess ? <p style={{ marginBottom: 0, color: "#177245" }}>{aiSuccess}</p> : null}
-        </div>
-      ) : null}
+        )}
 
-      <div className="grid" style={{ gridTemplateColumns: "repeat(auto-fit,minmax(200px,1fr))" }}>
-        <div className="field">
-          <label htmlFor="title">Title</label>
-          <input id="title" name="title" value={form.title} onChange={handleChange} required />
-        </div>
-        <div className="field">
-          <label htmlFor="brand">Brand</label>
-          <input id="brand" name="brand" value={form.brand} onChange={handleChange} required />
-        </div>
-        <div className="field">
-          <label htmlFor="model">Model</label>
-          <input id="model" name="model" value={form.model} onChange={handleChange} required />
-        </div>
-        <div className="field">
-          <label htmlFor="year">Year</label>
-          <input id="year" name="year" type="number" value={form.year} onChange={handleChange} required />
-        </div>
-        <div className="field">
-          <label htmlFor="price">Price</label>
-          <input id="price" name="price" type="number" value={form.price} onChange={handleChange} required />
-        </div>
-        <div className="field">
-          <label htmlFor="fuelType">Fuel Type</label>
-          <select id="fuelType" name="fuelType" value={form.fuelType} onChange={handleChange}>
-            <option value="Petrol">Petrol</option>
-            <option value="Diesel">Diesel</option>
-            <option value="Electric">Electric</option>
-            <option value="Hybrid">Hybrid</option>
-            <option value="CNG">CNG</option>
-            <option value="LPG">LPG</option>
-            <option value="Other">Other</option>
-          </select>
-        </div>
-        <div className="field">
-          <label htmlFor="transmission">Transmission</label>
-          <select id="transmission" name="transmission" value={form.transmission} onChange={handleChange}>
-            <option value="Manual">Manual</option>
-            <option value="Automatic">Automatic</option>
-            <option value="CVT">CVT</option>
-            <option value="AMT">AMT</option>
-            <option value="Other">Other</option>
-          </select>
-        </div>
-        <div className="field">
-          <label htmlFor="kilometersDriven">Kilometers Driven</label>
-          <input
-            id="kilometersDriven"
-            name="kilometersDriven"
-            type="number"
-            value={form.kilometersDriven}
-            onChange={handleChange}
-            required
-          />
-        </div>
-        <div className="field">
-          <label htmlFor="location">Location</label>
-          <input id="location" name="location" value={form.location} onChange={handleChange} required />
-        </div>
-        <div className="field" style={{ gridColumn: "1 / -1" }}>
-          <label htmlFor="description">Description</label>
-          <textarea
-            id="description"
-            name="description"
-            rows="4"
-            value={form.description}
-            onChange={handleChange}
-            required
-          />
-        </div>
-        <div className="field" style={{ gridColumn: "1 / -1" }}>
-          <label>Vehicle Photos</label>
-          <div style={{ border: "1px solid #e4ebf3", borderRadius: 12, padding: "0.8rem", background: "#f9fbff" }}>
-            <p style={{ marginTop: 0, marginBottom: "0.55rem", color: "#4c6785" }}>
-              Upload photos step-by-step: {uploadedCount}/{photoViews.length} completed
-            </p>
-            <div style={{ marginBottom: "0.65rem", padding: "0.6rem", borderRadius: 10, background: "#fff", border: "1px solid #deebff" }}>
-              <label htmlFor={`photo-${currentPhotoView.key}`} style={{ display: "block", marginBottom: "0.35rem", fontWeight: 700 }}>
-                Step {currentPhotoStep + 1}: {currentPhotoView.label}
-              </label>
-              <input
-                id={`photo-${currentPhotoView.key}`}
-                name={`photo-${currentPhotoView.key}`}
-                type="file"
-                accept="image/*"
-                onChange={(event) => handlePhotoSelect(currentPhotoView.key, event.target.files?.[0] || null)}
-              />
-              {viewFiles[currentPhotoView.key] ? (
-                <p style={{ marginBottom: 0, marginTop: "0.45rem", color: "#177245" }}>
-                  Uploaded: {viewFiles[currentPhotoView.key].name}
+        <div className="field field--full rc-upload-section">
+          <div className="rc-upload-header">
+            <div className="rc-upload-title">
+              <span className="rc-icon">RC</span>
+              <div>
+                <label htmlFor="rcDocument" className="rc-label">RC Document (Registration Certificate) *</label>
+                <p className="rc-description">
+                  Upload the RC document, extract details, verify them, and edit before publishing.
                 </p>
-              ) : null}
+              </div>
             </div>
-
-            <div style={{ display: "flex", gap: "0.5rem", marginBottom: "0.65rem" }}>
-              <button
-                type="button"
-                className="btn btn-secondary"
-                onClick={() => setCurrentPhotoStep((prev) => Math.max(prev - 1, 0))}
-                disabled={currentPhotoStep === 0}
-              >
-                Previous
-              </button>
-              <button
-                type="button"
-                className="btn btn-secondary"
-                onClick={() => setCurrentPhotoStep((prev) => Math.min(prev + 1, photoViews.length - 1))}
-                disabled={currentPhotoStep === photoViews.length - 1}
-              >
-                Next
-              </button>
-            </div>
-
-            <div className="grid" style={{ gridTemplateColumns: "repeat(auto-fit,minmax(170px,1fr))", gap: "0.5rem" }}>
-              {photoViews.map((view, index) => (
+            {hasExistingRC && !rcFile && !rcRemoved && (
+              <div style={{ display: "flex", alignItems: "center", gap: "0.6rem" }}>
+                <div className="rc-existing-badge">RC on file</div>
                 <button
-                  key={view.key}
                   type="button"
-                  className="btn"
-                  onClick={() => setCurrentPhotoStep(index)}
-                  style={{
-                    textAlign: "left",
-                    background: index === currentPhotoStep ? "#dce8fc" : "#ffffff",
-                    border: "1px solid #e4ebf3",
+                  onClick={() => {
+                    setRcRemoved(true);
+                    setRcError("");
+                  }}
+                  className="btn btn-danger"
+                >
+                  Remove RC
+                </button>
+              </div>
+            )}
+          </div>
+
+          <div className={`rc-dropzone ${rcFile ? "rc-dropzone--selected" : ""} ${rcError ? "rc-dropzone--error" : ""}`}>
+            <input
+              id="rcDocument"
+              ref={rcInputRef}
+              type="file"
+              accept={RC_ACCEPTED}
+              onChange={handleRCChange}
+              className="rc-file-input"
+              required={!hasExistingRC}
+            />
+
+            {!rcFile ? (
+              <div className="rc-dropzone-placeholder">
+                <div className="rc-upload-text">Choose RC file to upload</div>
+                <div className="rc-upload-formats">PDF | JPG | PNG | Max 5MB</div>
+              </div>
+            ) : (
+              <div className="rc-file-selected">
+                {rcPreview === "pdf" ? <div className="rc-pdf-icon">PDF</div> : rcPreview ? <img src={rcPreview} alt="RC preview" className="rc-img-preview" /> : null}
+                <div className="rc-file-info">
+                  <div className="rc-file-name">{rcFile.name}</div>
+                  <div className="rc-file-size">{(rcFile.size / 1024).toFixed(0)} KB</div>
+                </div>
+                <button
+                  type="button"
+                  className="rc-remove-btn"
+                  onClick={() => {
+                    setRcFile(null);
+                    setRcPreview(null);
+                    setRcError("");
+                    setRcExtractMessage("");
+                    if (rcInputRef.current) rcInputRef.current.value = "";
                   }}
                 >
-                  {view.label}
-                  <span style={{ marginLeft: "0.35rem", color: viewFiles[view.key] ? "#177245" : "#9aa9bc" }}>
-                    {viewFiles[view.key] ? "Uploaded" : "Pending"}
-                  </span>
+                  Remove
                 </button>
-              ))}
+              </div>
+            )}
+          </div>
+
+          <div style={{ marginTop: "0.65rem" }}>
+            <button type="button" className="btn btn-secondary" onClick={handleExtractFromRC} disabled={rcExtracting}>
+              {rcExtracting ? "Extracting..." : "Extract RC Details"}
+            </button>
+            {rcExtractMessage ? <p style={{ marginTop: "0.45rem", marginBottom: 0, color: "#177245" }}>{rcExtractMessage}</p> : null}
+          </div>
+
+          {rcError ? (
+            <div className="rc-error">
+              <span>!</span> {rcError}
+            </div>
+          ) : null}
+
+          <div style={{ marginTop: "0.9rem", borderTop: "1px solid #d7e2f0", paddingTop: "0.75rem" }}>
+            <p style={{ marginTop: 0, marginBottom: "0.65rem", color: "#4c6785", fontWeight: 600 }}>
+              RC Details (confirm/edit before publish)
+            </p>
+            <div className="car-form-grid">
+              <div className="field">
+                <label htmlFor="registrationNumber">Registration Number</label>
+                <input id="registrationNumber" name="registrationNumber" value={rcDetails.registrationNumber} onChange={handleRcDetailsChange} />
+              </div>
+              <div className="field">
+                <label htmlFor="ownerName">Owner Name</label>
+                <input id="ownerName" name="ownerName" value={rcDetails.ownerName} onChange={handleRcDetailsChange} />
+              </div>
+              <div className="field">
+                <label htmlFor="manufacturer">Manufacturer</label>
+                <input id="manufacturer" name="manufacturer" value={rcDetails.manufacturer} onChange={handleRcDetailsChange} />
+              </div>
+              <div className="field">
+                <label htmlFor="vehicleModel">Vehicle Model</label>
+                <input id="vehicleModel" name="vehicleModel" value={rcDetails.vehicleModel} onChange={handleRcDetailsChange} />
+              </div>
+              <div className="field">
+                <label htmlFor="fuelTypeRc">Fuel Type</label>
+                <input id="fuelTypeRc" name="fuelType" value={rcDetails.fuelType} onChange={handleRcDetailsChange} />
+              </div>
+              <div className="field">
+                <label htmlFor="manufacturingYear">Manufacturing Year</label>
+                <input id="manufacturingYear" name="manufacturingYear" value={rcDetails.manufacturingYear} onChange={handleRcDetailsChange} />
+              </div>
+              <div className="field">
+                <label htmlFor="registrationDate">Registration Date</label>
+                <input id="registrationDate" name="registrationDate" value={rcDetails.registrationDate} onChange={handleRcDetailsChange} />
+              </div>
+              <div className="field">
+                <label htmlFor="rtoOffice">RTO Office</label>
+                <input id="rtoOffice" name="rtoOffice" value={rcDetails.rtoOffice} onChange={handleRcDetailsChange} />
+              </div>
+              <div className="field">
+                <label htmlFor="engineNumber">Engine Number</label>
+                <input id="engineNumber" name="engineNumber" value={rcDetails.engineNumber} onChange={handleRcDetailsChange} />
+              </div>
+              <div className="field">
+                <label htmlFor="chassisNumber">Chassis Number</label>
+                <input id="chassisNumber" name="chassisNumber" value={rcDetails.chassisNumber} onChange={handleRcDetailsChange} />
+              </div>
+              <div className="field">
+                <label htmlFor="vehicleColor">Vehicle Color</label>
+                <input id="vehicleColor" name="vehicleColor" value={rcDetails.vehicleColor} onChange={handleRcDetailsChange} />
+              </div>
+              <div className="field">
+                <label htmlFor="seatingCapacity">Seating Capacity</label>
+                <input id="seatingCapacity" name="seatingCapacity" value={rcDetails.seatingCapacity} onChange={handleRcDetailsChange} />
+              </div>
             </div>
           </div>
+
+          <div className="rc-info-box">
+            <span className="rc-info-icon">Secure</span>
+            <span>RC document is stored privately. Buyers only see confirmed vehicle details, not the RC file.</span>
+          </div>
         </div>
+
+        {carPhotosSection}
+
         {includeStatus ? (
           <div className="field">
             <label htmlFor="status">Status</label>
             <select id="status" name="status" value={form.status} onChange={handleChange}>
-              <option value="approved">approved</option>
-              <option value="pending">pending</option>
-              <option value="rejected">rejected</option>
+              <option value="approved">Approved</option>
+              <option value="pending">Pending</option>
+              <option value="rejected">Rejected</option>
             </select>
           </div>
         ) : null}
       </div>
 
-      <button type="submit" className="btn btn-primary" style={{ marginTop: "1rem" }}>
-        {submitLabel}
-      </button>
+      <div className="car-form-footer">
+        <button type="submit" className="btn btn-primary">{submitLabel}</button>
+        {isEditing && hasExistingRC && !rcFile ? (
+          <p className="rc-edit-note">Existing RC document will be kept unless you upload a new one.</p>
+        ) : null}
+      </div>
     </form>
   );
 };

@@ -10,6 +10,15 @@ export const getCarById = async (id) => {
   return response.data;
 };
 
+export const extractCarFromRC = async (file) => {
+  const payload = new FormData();
+  payload.append("rcDocument", file);
+  const response = await api.post("/cars/rc-extract", payload, {
+    headers: { "Content-Type": "multipart/form-data" },
+  });
+  return response.data;
+};
+
 export const createCar = async (payload) => {
   const response = await api.post("/cars", payload, {
     headers: { "Content-Type": "multipart/form-data" },
@@ -41,6 +50,12 @@ export const updateCar = async (id, payload) => {
 export const deleteCar = async (id) => {
   const response = await api.delete(`/cars/${id}`);
   return response.data;
+};
+
+/* ── RC Document: get a short-lived signed URL (owner/admin only) ── */
+export const getRCDocumentUrl = async (carId) => {
+  const response = await api.get(`/cars/${carId}/rc-url`);
+  return response.data; // { url, expiresAt, format }
 };
 
 export const getAdminCars = async () => {
