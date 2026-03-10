@@ -1,4 +1,4 @@
-import { NavLink, Navigate, Route, Routes } from "react-router-dom";
+import { NavLink, Navigate, Route, Routes, useLocation } from "react-router-dom";
 import { useEffect, useMemo, useState } from "react";
 import HomePage from "./pages/HomePage";
 import CarDetailPage from "./pages/CarDetailPage";
@@ -12,15 +12,19 @@ import DealerProfilePage from "./pages/DealerProfilePage";
 import CarsAnimation from "./components/CarsAnimation";
 import { getStoredUser, logout } from "./services/authService";
 import { getMessageNotifications } from "./services/messageService";
+import useScrollReveal from "./hooks/useScrollReveal";
 import "./App.css";
 
 const App = () => {
+  const location = useLocation();
   const [user, setUser] = useState(() => getStoredUser());
   const [unreadCount, setUnreadCount] = useState(0);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
 
   const isAuthenticated = Boolean(user);
   const isAdmin = useMemo(() => user?.role === "admin", [user]);
+
+  useScrollReveal(location.pathname);
 
   useEffect(() => {
     if (!isAuthenticated) return undefined;
