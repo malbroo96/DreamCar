@@ -26,7 +26,7 @@ const AddCarPage = () => {
       <h1>Add a Car Listing</h1>
       {error ? <p style={{ color: "#c63030" }}>{error}</p> : null}
       {submitting ? <p>Submitting listing...</p> : null}
-      <CarForm onSubmit={handleCreate} submitLabel="Publish Listing" />
+      <CarForm onSubmit={handleCreate} submitLabel="Publish Listing" manualEntryEnabled={false} />
     </section>
   );
 };

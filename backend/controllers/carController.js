@@ -1,5 +1,6 @@
 import Car from "../models/Car.js";
 import cloudinary from "../config/cloudinary.js";
+import { extractRcDetailsFromBase64 } from "../services/geminiService.js";
 
 /* ══════════════════════════════════════════
    CLOUDINARY CONFIG CHECK
@@ -57,6 +58,118 @@ const buildFilters = (query) => {
 const buildOwnerScopedQuery = (req, baseQuery = {}) => {
   if (req.user?.role === "admin") return { ...baseQuery };
   return { ...baseQuery, ownerId: req.user?.id };
+};
+
+const parseJsonFromText = (text = "") => {
+  const raw = String(text || "").trim();
+  if (!raw) return null;
+  try {
+    return JSON.parse(raw);
+  } catch {
+    const start = raw.indexOf("{");
+    const end = raw.lastIndexOf("}");
+    if (start >= 0 && end > start) {
+      try {
+        return JSON.parse(raw.slice(start, end + 1));
+      } catch {
+        return null;
+      }
+    }
+    return null;
+  }
+};
+
+const normalizeFuelType = (raw = "") => {
+  const value = String(raw || "").toLowerCase();
+  if (!value) return "";
+  if (value.includes("petrol") || value.includes("gasoline")) return "Petrol";
+  if (value.includes("diesel")) return "Diesel";
+  if (value.includes("electric") || value.includes("ev")) return "Electric";
+  if (value.includes("hybrid")) return "Hybrid";
+  if (value.includes("cng")) return "CNG";
+  if (value.includes("lpg")) return "LPG";
+  return "Other";
+};
+
+const parseRcDetailsFromBody = (body = {}) => {
+  const raw = body.rcDetails;
+  if (!raw) return undefined;
+  let parsed = null;
+  try {
+    parsed = typeof raw === "string" ? JSON.parse(raw) : raw;
+  } catch {
+    return undefined;
+  }
+
+  if (!parsed || typeof parsed !== "object") return undefined;
+  return {
+    registrationNumber: String(parsed.registrationNumber || "").trim(),
+    ownerName: String(parsed.ownerName || "").trim(),
+    manufacturer: String(parsed.manufacturer || "").trim(),
+    vehicleModel: String(parsed.vehicleModel || "").trim(),
+    fuelType: String(parsed.fuelType || "").trim(),
+    manufacturingYear: String(parsed.manufacturingYear || "").trim(),
+    registrationDate: String(parsed.registrationDate || "").trim(),
+    engineNumber: String(parsed.engineNumber || "").trim(),
+    chassisNumber: String(parsed.chassisNumber || "").trim(),
+    vehicleColor: String(parsed.vehicleColor || "").trim(),
+    seatingCapacity: String(parsed.seatingCapacity || "").trim(),
+    rtoOffice: String(parsed.rtoOffice || "").trim(),
+  };
+};
+
+const runGeminiExtraction = async ({ apiKey, mimeType, base64Data, prompt }) => {
+  const preferredModel = String(process.env.GEMINI_MODEL || "").trim();
+  const models = [preferredModel, "gemini-2.0-flash", "gemini-1.5-flash"].filter(Boolean);
+  const uniqueModels = [...new Set(models)];
+  let lastError = "Unknown Gemini error";
+
+  for (const model of uniqueModels) {
+    const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+    const response = await fetch(endpoint, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        contents: [
+          {
+            parts: [
+              { text: prompt },
+              {
+                inline_data: {
+                  mime_type: mimeType,
+                  data: base64Data,
+                },
+              },
+            ],
+          },
+        ],
+        generationConfig: {
+          temperature: 0.1,
+        },
+      }),
+    });
+
+    const bodyText = await response.text();
+    if (!response.ok) {
+      lastError = `${model}: ${bodyText || response.statusText}`;
+      continue;
+    }
+
+    try {
+      const parsed = JSON.parse(bodyText);
+      const parts = parsed?.candidates?.[0]?.content?.parts || [];
+      const textOutput = parts.map((part) => part.text).filter(Boolean).join("\n");
+      if (!textOutput) {
+        lastError = `${model}: Empty content returned by Gemini`;
+        continue;
+      }
+      return textOutput;
+    } catch {
+      lastError = `${model}: Invalid JSON response from Gemini`;
+    }
+  }
+
+  throw new Error(lastError);
 };
 
 /* ══════════════════════════════════════════
@@ -195,6 +308,58 @@ export const getCarById = async (req, res, next) => {
   }
 };
 
+export const extractCarFromRC = async (req, res, next) => {
+  try {
+    const rcFile = req.file;
+    if (!rcFile) {
+      res.status(400);
+      throw new Error("RC document is required for extraction");
+    }
+
+    const extracted = await extractRcDetailsFromBase64({
+      base64Image: rcFile.buffer.toString("base64"),
+      mimeType: rcFile.mimetype,
+    });
+
+    const fuelType = normalizeFuelType(extracted.fuel_type) || "Other";
+    const inferredBrand = String(extracted.vehicle_class || "").trim() || "Vehicle";
+    const inferredModel = String(extracted.registration_no || "").trim() || "RC Listing";
+    const year = String(new Date().getFullYear());
+
+    const rcDetails = {
+      registrationNumber: String(extracted.registration_no || "").trim(),
+      ownerName: String(extracted.owner_name || "").trim(),
+      manufacturer: "",
+      vehicleModel: "",
+      fuelType: String(extracted.fuel_type || "").trim(),
+      manufacturingYear: "",
+      registrationDate: String(extracted.expiry_date || "").trim(),
+      engineNumber: String(extracted.engine_no || "").trim(),
+      chassisNumber: String(extracted.chassis_no || "").trim(),
+      vehicleColor: "",
+      seatingCapacity: "",
+      rtoOffice: String(extracted.vehicle_class || "").trim(),
+    };
+
+    const autoFill = {
+      title: [year, inferredBrand, inferredModel].filter(Boolean).join(" ").trim(),
+      brand: inferredBrand,
+      model: inferredModel,
+      year,
+      fuelType,
+      location: rcDetails.rtoOffice || "India",
+    };
+
+    res.json({
+      verified: true,
+      autoFill,
+      rcDetails,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
 /* ── Create car listing ── */
 export const createCar = async (req, res, next) => {
   try {
@@ -211,6 +376,7 @@ export const createCar = async (req, res, next) => {
 
     /* Upload RC document (private/authenticated) */
     const rcDocumentData = await uploadRCDocument(rcFile);
+    const rcDetails = parseRcDetailsFromBody(req.body);
 
     const car = await Car.create({
       title: req.body.title,
@@ -229,6 +395,7 @@ export const createCar = async (req, res, next) => {
       ownerName: req.user.name,
       images: uploadedImages,
       rcDocument: rcDocumentData,
+      rcDetails: rcDetails || undefined,
     });
 
     res.status(201).json(car);
@@ -249,6 +416,10 @@ export const updateCar = async (req, res, next) => {
     }
 
     applyUpdatableFields(car, req.body);
+    const rcDetails = parseRcDetailsFromBody(req.body);
+    if (rcDetails) {
+      car.rcDetails = rcDetails;
+    }
 
     /* Handle keepImages — frontend sends publicIds of images to KEEP.
        Any existing image NOT in keepImages gets deleted from Cloudinary. */
@@ -408,6 +579,10 @@ export const updateAdminCar = async (req, res, next) => {
     }
 
     applyUpdatableFields(car, req.body);
+    const rcDetails = parseRcDetailsFromBody(req.body);
+    if (rcDetails) {
+      car.rcDetails = rcDetails;
+    }
 
     if (req.files?.images?.length) {
       const uploadedImages = await uploadImages(req.files.images);

@@ -2,18 +2,20 @@ import express from "express";
 import {
   createCar,
   deleteCar,
+  extractCarFromRC,
   getCarById,
   getCars,
   updateCar,
   getRCDocumentUrl,
   verifyRCDocument,
 } from "../controllers/carController.js";
-import { uploadCarFilesFiltered } from "../middleware/upload.js";
+import { uploadCarFilesFiltered, uploadRC } from "../middleware/upload.js";
 import { protect, adminOnly } from "../middleware/auth.js";
 
 const router = express.Router();
 
 router.use(protect);
+router.post("/rc-extract", uploadRC.single("rcDocument"), extractCarFromRC);
 
 router.route("/")
   .get(getCars)

@@ -10,6 +10,15 @@ export const getCarById = async (id) => {
   return response.data;
 };
 
+export const extractCarFromRC = async (file) => {
+  const payload = new FormData();
+  payload.append("rcDocument", file);
+  const response = await api.post("/cars/rc-extract", payload, {
+    headers: { "Content-Type": "multipart/form-data" },
+  });
+  return response.data;
+};
+
 export const createCar = async (payload) => {
   const response = await api.post("/cars", payload, {
     headers: { "Content-Type": "multipart/form-data" },

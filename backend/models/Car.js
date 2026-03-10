@@ -18,6 +18,24 @@ const rcDocumentSchema = new mongoose.Schema(
   { _id: false }
 );
 
+const rcDetailsSchema = new mongoose.Schema(
+  {
+    registrationNumber: { type: String, trim: true, default: "" },
+    ownerName: { type: String, trim: true, default: "" },
+    manufacturer: { type: String, trim: true, default: "" },
+    vehicleModel: { type: String, trim: true, default: "" },
+    fuelType: { type: String, trim: true, default: "" },
+    manufacturingYear: { type: String, trim: true, default: "" },
+    engineNumber: { type: String, trim: true, default: "" },
+    chassisNumber: { type: String, trim: true, default: "" },
+    vehicleColor: { type: String, trim: true, default: "" },
+    seatingCapacity: { type: String, trim: true, default: "" },
+    registrationDate: { type: String, trim: true, default: "" },
+    rtoOffice: { type: String, trim: true, default: "" },
+  },
+  { _id: false }
+);
+
 const carSchema = new mongoose.Schema(
   {
     title: { type: String, required: true, trim: true },
@@ -48,6 +66,7 @@ const carSchema = new mongoose.Schema(
       required: [true, "RC document is required"],
     },
     rcVerified: { type: Boolean, default: false }, // admin can mark as verified
+    rcDetails: { type: rcDetailsSchema, default: () => ({}) },
     status: {
       type: String,
       enum: ["approved", "pending", "rejected"],

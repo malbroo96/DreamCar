@@ -149,6 +149,27 @@ const CarDetailPage = () => {
           </div>
 
           <p style={{ color: "#2a3f58", lineHeight: 1.6, fontSize: "0.9rem" }}>{car.description}</p>
+
+          {car.rcDetails ? (
+            <div className="card" style={{ padding: "0.9rem", marginBottom: "0.9rem" }}>
+              <p style={{ margin: "0 0 0.45rem", fontWeight: 700 }}>RC Confirmed Details</p>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.45rem" }}>
+                {car.rcDetails.registrationNumber ? <p style={{ margin: 0 }}>Reg No: {car.rcDetails.registrationNumber}</p> : null}
+                {car.rcDetails.ownerName ? <p style={{ margin: 0 }}>Owner: {car.rcDetails.ownerName}</p> : null}
+                {car.rcDetails.manufacturer ? <p style={{ margin: 0 }}>Manufacturer: {car.rcDetails.manufacturer}</p> : null}
+                {car.rcDetails.vehicleModel ? <p style={{ margin: 0 }}>Model: {car.rcDetails.vehicleModel}</p> : null}
+                {car.rcDetails.fuelType ? <p style={{ margin: 0 }}>Fuel: {car.rcDetails.fuelType}</p> : null}
+                {car.rcDetails.manufacturingYear ? <p style={{ margin: 0 }}>Mfg Year: {car.rcDetails.manufacturingYear}</p> : null}
+                {car.rcDetails.registrationDate ? <p style={{ margin: 0 }}>Reg Date: {car.rcDetails.registrationDate}</p> : null}
+                {car.rcDetails.rtoOffice ? <p style={{ margin: 0 }}>RTO: {car.rcDetails.rtoOffice}</p> : null}
+                {car.rcDetails.engineNumber ? <p style={{ margin: 0 }}>Engine: {car.rcDetails.engineNumber}</p> : null}
+                {car.rcDetails.chassisNumber ? <p style={{ margin: 0 }}>Chassis: {car.rcDetails.chassisNumber}</p> : null}
+                {car.rcDetails.vehicleColor ? <p style={{ margin: 0 }}>Color: {car.rcDetails.vehicleColor}</p> : null}
+                {car.rcDetails.seatingCapacity ? <p style={{ margin: 0 }}>Seats: {car.rcDetails.seatingCapacity}</p> : null}
+              </div>
+            </div>
+          ) : null}
+
           <p style={{ color: "#7a96b4", fontSize: "0.82rem" }}>
             Posted on {new Date(car.createdAt).toLocaleDateString("en-IN", { year: "numeric", month: "long", day: "numeric" })}
           </p>
