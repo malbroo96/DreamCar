@@ -23,10 +23,13 @@ const AddCarPage = () => {
 
   return (
     <section>
-      <h1>Add a Car Listing</h1>
-      {error ? <p style={{ color: "#c63030" }}>{error}</p> : null}
-      {submitting ? <p>Submitting listing...</p> : null}
-      <CarForm onSubmit={handleCreate} submitLabel="Publish Listing" manualEntryEnabled={false} />
+      <h1>Sell Your Car</h1>
+      <p style={{ color: "#4c6785", marginTop: 0, marginBottom: "1.5rem" }}>
+        Fill in the details below. Upload your RC document to auto-fill vehicle information.
+      </p>
+      {error && <p style={{ color: "#c63030", background: "#fff0f0", border: "1px solid #fecaca", borderRadius: 10, padding: "0.65rem 1rem" }}>{error}</p>}
+      {submitting && <p style={{ color: "#0b6ef3" }}>Publishing your listing...</p>}
+      <CarForm onSubmit={handleCreate} submitLabel="Publish Listing" />
     </section>
   );
 };

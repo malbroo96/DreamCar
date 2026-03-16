@@ -8,12 +8,11 @@ const carImageSchema = new mongoose.Schema(
   { _id: false }
 );
 
-/* ── RC Document stored as private Cloudinary asset ── */
 const rcDocumentSchema = new mongoose.Schema(
   {
-    publicId: { type: String, required: true }, // Cloudinary public_id
-    resourceType: { type: String, default: "image" }, // "image" for jpg/png, "raw" for pdf
-    format: { type: String }, // "pdf", "jpg", "png"
+    publicId: { type: String, required: true },
+    resourceType: { type: String, default: "image" },
+    format: { type: String },
   },
   { _id: false }
 );
@@ -21,28 +20,44 @@ const rcDocumentSchema = new mongoose.Schema(
 const rcDetailsSchema = new mongoose.Schema(
   {
     registrationNumber: { type: String, trim: true, default: "" },
-    ownerName: { type: String, trim: true, default: "" },
-    manufacturer: { type: String, trim: true, default: "" },
-    vehicleModel: { type: String, trim: true, default: "" },
-    fuelType: { type: String, trim: true, default: "" },
-    manufacturingYear: { type: String, trim: true, default: "" },
-    engineNumber: { type: String, trim: true, default: "" },
-    chassisNumber: { type: String, trim: true, default: "" },
-    vehicleColor: { type: String, trim: true, default: "" },
-    seatingCapacity: { type: String, trim: true, default: "" },
-    registrationDate: { type: String, trim: true, default: "" },
-    rtoOffice: { type: String, trim: true, default: "" },
+    ownerName:          { type: String, trim: true, default: "" },
+    manufacturer:       { type: String, trim: true, default: "" },
+    vehicleModel:       { type: String, trim: true, default: "" },
+    fuelType:           { type: String, trim: true, default: "" },
+    manufacturingYear:  { type: String, trim: true, default: "" },
+    engineNumber:       { type: String, trim: true, default: "" },
+    chassisNumber:      { type: String, trim: true, default: "" },
+    vehicleColor:       { type: String, trim: true, default: "" },
+    seatingCapacity:    { type: String, trim: true, default: "" },
+    registrationDate:   { type: String, trim: true, default: "" },
+    rtoOffice:          { type: String, trim: true, default: "" },
+  },
+  { _id: false }
+);
+
+const healthCheckSchema = new mongoose.Schema(
+  {
+    engine:       { type: Number, min: 0, max: 5, default: null },
+    transmission: { type: Number, min: 0, max: 5, default: null },
+    brakes:       { type: Number, min: 0, max: 5, default: null },
+    tyres:        { type: Number, min: 0, max: 5, default: null },
+    ac:           { type: Number, min: 0, max: 5, default: null },
+    electricals:  { type: Number, min: 0, max: 5, default: null },
+    suspension:   { type: Number, min: 0, max: 5, default: null },
+    body:         { type: Number, min: 0, max: 5, default: null },
+    inspectedAt:  { type: Date, default: null },
+    inspectedBy:  { type: String, trim: true, default: "" },
   },
   { _id: false }
 );
 
 const carSchema = new mongoose.Schema(
   {
-    title: { type: String, required: true, trim: true },
-    brand: { type: String, required: true, trim: true },
-    model: { type: String, required: true, trim: true },
-    year: { type: Number, required: true },
-    price: { type: Number, required: true },
+    title:           { type: String, required: true, trim: true },
+    brand:           { type: String, required: true, trim: true },
+    model:           { type: String, required: true, trim: true },
+    year:            { type: Number, required: true },
+    price:           { type: Number, required: true },
     fuelType: {
       type: String,
       required: true,
@@ -54,19 +69,21 @@ const carSchema = new mongoose.Schema(
       enum: ["Manual", "Automatic", "CVT", "AMT", "Other"],
     },
     kilometersDriven: { type: Number, required: true },
-    description: { type: String, required: true, trim: true },
+    description:      { type: String, required: true, trim: true },
     location: { type: String, required: true, trim: true },
-    ownerId: { type: String, index: true },
+    city:     { type: String, trim: true, default: "", index: true },
+    area:     { type: String, trim: true, default: "" },
+    ownerId:    { type: String, index: true },
     ownerEmail: { type: String, trim: true, lowercase: true },
-    ownerName: { type: String, trim: true },
-    images: { type: [carImageSchema], default: [] },
-    /* RC Document — stored privately, never exposed as a direct URL */
-    rcDocument: {
-      type: rcDocumentSchema,
-      required: [true, "RC document is required"],
-    },
-    rcVerified: { type: Boolean, default: false }, // admin can mark as verified
-    rcDetails: { type: rcDetailsSchema, default: () => ({}) },
+    ownerName:  { type: String, trim: true },
+    images:      { type: [carImageSchema], default: [] },
+    rcDocument:  { type: rcDocumentSchema, required: [true, "RC document is required"] },
+    rcVerified:  { type: Boolean, default: false },
+    rcDetails:   { type: rcDetailsSchema, default: () => ({}) },
+    healthCheck: { type: healthCheckSchema, default: () => ({}) },
+    featured:    { type: Boolean, default: false, index: true },
+    listingPaid: { type: Boolean, default: false },
+    paymentId:   { type: String, trim: true, default: "" },
     status: {
       type: String,
       enum: ["approved", "pending", "rejected"],
@@ -77,5 +94,4 @@ const carSchema = new mongoose.Schema(
 );
 
 const Car = mongoose.model("Car", carSchema);
-
 export default Car;
