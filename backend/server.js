@@ -12,6 +12,7 @@ import authRoutes from "./routes/authRoutes.js";
 import userRoutes from "./routes/userRoutes.js";
 import messageRoutes from "./routes/messageRoutes.js";
 import chatbotRouter from "./routes/chatbot.js";
+import inspectionRoutes from "./routes/inspectionRoutes.js";
 import { registerMessageSocketHandlers } from "./socket/messageSocket.js";
 import { errorHandler, notFound } from "./middleware/errorHandler.js";
 
@@ -49,7 +50,8 @@ app.use("/api/admin",    adminRoutes);
 app.use("/api/auth",     authRoutes);
 app.use("/api/users",    userRoutes);
 app.use("/api/messages", messageRoutes);
-app.use("/api/chat",     chatbotRouter);   // DreamBot — POST /api/chat/support
+app.use("/api/chat",        chatbotRouter);
+app.use("/api/inspections", inspectionRoutes);
 
 app.use(notFound);
 app.use(errorHandler);

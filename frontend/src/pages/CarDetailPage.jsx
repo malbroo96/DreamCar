@@ -3,6 +3,7 @@ import { Link, useNavigate, useParams } from "react-router-dom";
 import { getCarById, getCars } from "../services/carService";
 import { getStoredUser } from "../services/authService";
 import { startConversation } from "../services/messageService";
+import { requestInspection } from "../services/inspectionService";
 import CarCard from "../components/CarCard";
 import "./CarDetailPage.css";
 
@@ -52,6 +53,11 @@ const CarDetailPage = () => {
   const [chatError, setChatError]       = useState("");
   const [chatLoading, setChatLoading]   = useState(false);
   const [rcOpen, setRcOpen]             = useState(false);
+  const [inspectionOpen, setInspectionOpen] = useState(false);
+  const [inspectionForm, setInspectionForm] = useState({ preferredDate: "", preferredTime: "Morning", location: "", notes: "" });
+  const [inspectionLoading, setInspectionLoading] = useState(false);
+  const [inspectionSuccess, setInspectionSuccess] = useState(false);
+  const [inspectionError, setInspectionError]     = useState("");
 
   /* EMI state */
   const [emiDownPct, setEmiDownPct]     = useState(20);
@@ -103,6 +109,24 @@ const CarDetailPage = () => {
       setChatError(err.response?.data?.message || "Failed to start chat");
     } finally {
       setChatLoading(false);
+    }
+  };
+
+  const handleInspectionSubmit = async (e) => {
+    e.preventDefault();
+    try {
+      setInspectionLoading(true);
+      setInspectionError("");
+      await requestInspection(car._id, {
+        ...inspectionForm,
+        location: inspectionForm.location || car.location,
+      });
+      setInspectionSuccess(true);
+      setInspectionOpen(false);
+    } catch (err) {
+      setInspectionError(err.response?.data?.message || "Failed to submit request");
+    } finally {
+      setInspectionLoading(false);
     }
   };
 
@@ -367,6 +391,11 @@ const CarDetailPage = () => {
 
             {/* Action buttons */}
             {chatError && <p className="cdp-chat-error">⚠ {chatError}</p>}
+            {inspectionSuccess && (
+              <div className="cdp-inspection-success">
+                ✅ Inspection request submitted! Our team will contact you shortly.
+              </div>
+            )}
             {!isOwner && car.ownerId && (
               <div className="cdp-actions">
                 <button
@@ -376,6 +405,14 @@ const CarDetailPage = () => {
                   disabled={chatLoading}
                 >
                   {chatLoading ? "Connecting..." : "💬 Message Seller"}
+                </button>
+                <button
+                  type="button"
+                  className="btn cdp-btn-full cdp-btn-inspection"
+                  onClick={() => setInspectionOpen(true)}
+                  disabled={inspectionSuccess}
+                >
+                  🔍 Request Inspection
                 </button>
                 <Link to={`/dealer/${car.ownerId}`} className="btn btn-secondary cdp-btn-full" style={{textAlign:"center"}}>
                   👤 View Dealer Profile
@@ -473,6 +510,85 @@ const CarDetailPage = () => {
 
         </div>{/* end cdp-right */}
       </div>{/* end cdp-layout */}
+
+      {/* ════════════════════════════════════════
+          INSPECTION REQUEST MODAL
+      ════════════════════════════════════════ */}
+      {inspectionOpen && (
+        <div className="cdp-lightbox" onClick={() => setInspectionOpen(false)}>
+          <div className="cdp-insp-modal card" onClick={(e) => e.stopPropagation()}>
+            <div className="cdp-insp-header">
+              <div>
+                <h2 className="cdp-insp-title">🔍 Request Inspection</h2>
+                <p className="cdp-insp-subtitle">{car.title}</p>
+              </div>
+              <button className="cdp-lightbox-close" style={{ position:"static" }} onClick={() => setInspectionOpen(false)}>✕</button>
+            </div>
+
+            <form onSubmit={handleInspectionSubmit} className="cdp-insp-form">
+              <div className="field">
+                <label>Preferred Date</label>
+                <input
+                  type="date"
+                  value={inspectionForm.preferredDate}
+                  min={new Date().toISOString().split("T")[0]}
+                  onChange={(e) => setInspectionForm((p) => ({ ...p, preferredDate: e.target.value }))}
+                />
+              </div>
+
+              <div className="field">
+                <label>Preferred Time</label>
+                <select
+                  value={inspectionForm.preferredTime}
+                  onChange={(e) => setInspectionForm((p) => ({ ...p, preferredTime: e.target.value }))}
+                >
+                  <option value="Morning">Morning (9 AM – 12 PM)</option>
+                  <option value="Afternoon">Afternoon (12 PM – 4 PM)</option>
+                  <option value="Evening">Evening (4 PM – 7 PM)</option>
+                </select>
+              </div>
+
+              <div className="field">
+                <label>Inspection Location</label>
+                <input
+                  type="text"
+                  value={inspectionForm.location}
+                  onChange={(e) => setInspectionForm((p) => ({ ...p, location: e.target.value }))}
+                  placeholder={car.location || "Enter preferred location"}
+                />
+              </div>
+
+              <div className="field">
+                <label>Additional Notes (optional)</label>
+                <textarea
+                  rows="3"
+                  value={inspectionForm.notes}
+                  onChange={(e) => setInspectionForm((p) => ({ ...p, notes: e.target.value }))}
+                  placeholder="Any specific concerns or requirements..."
+                />
+              </div>
+
+              {inspectionError && (
+                <div className="cdp-chat-error">⚠ {inspectionError}</div>
+              )}
+
+              <div className="cdp-insp-info">
+                <span>ℹ</span>
+                <span>Our team will review your request and contact you within 24 hours to confirm the inspection schedule.</span>
+              </div>
+
+              <div style={{ display:"flex", gap:"0.75rem", marginTop:"1rem" }}>
+                <button type="button" className="btn btn-secondary" style={{ flex:1 }} onClick={() => setInspectionOpen(false)}>
+                  Cancel
+                </button>
+                <button type="submit" className="btn btn-primary" style={{ flex:1 }} disabled={inspectionLoading}>
+                  {inspectionLoading ? "Submitting..." : "Submit Request"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
       {/* ════════════════════════════════════════
           SIMILAR CARS
