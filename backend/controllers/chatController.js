@@ -1,4 +1,4 @@
-import Groq from "groq-sdk";
+import { GoogleGenerativeAI } from "@google/generative-ai";
 
 const SYSTEM_PROMPT = `You are DreamBot, the friendly and helpful AI customer support assistant for DreamCar — an online car marketplace based in India where car dealers can list cars for sale and buyers can browse listings, contact dealers, and communicate via chat.
 
@@ -17,34 +17,39 @@ Platform features you know about:
 
 Always be helpful. If you don't know something platform-specific, say so honestly.`;
 
-const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
-
 export const handleChatSupport = async (req, res) => {
   try {
-    if (!process.env.GROQ_API_KEY) {
-      return res.status(500).json({ message: "GROQ_API_KEY is not configured" });
+    const apiKey = process.env.GEMINI_API_KEY;
+    if (!apiKey) {
+      return res.status(500).json({ message: "GEMINI_API_KEY is not configured" });
     }
 
     const messages = Array.isArray(req.body?.messages) ? req.body.messages : [];
-
     const sanitized = messages
-      .filter((m) => ["user", "assistant"].includes(m.role) && typeof m.content === "string")
+      .filter((m) => ["user", "assistant"].includes(m.role) && typeof m.content === "string" && m.content.trim())
       .slice(-20);
 
     if (!sanitized.length) {
       return res.status(400).json({ message: "messages array is required" });
     }
 
-    const completion = await groq.chat.completions.create({
-      model: "llama-3.1-8b-instant",
-      max_tokens: 1000,
-      messages: [
-        { role: "system", content: SYSTEM_PROMPT },
-        ...sanitized,
-      ],
+    const genAI = new GoogleGenerativeAI(apiKey);
+    const model = genAI.getGenerativeModel({
+      model: "gemini-2.0-flash-lite",
+      systemInstruction: SYSTEM_PROMPT,
     });
 
-    const replyText = completion.choices[0]?.message?.content
+    /* Gemini uses "model" role instead of "assistant" */
+    const history = sanitized.slice(0, -1).map((m) => ({
+      role: m.role === "assistant" ? "model" : "user",
+      parts: [{ text: m.content }],
+    }));
+
+    const lastMessage = sanitized[sanitized.length - 1];
+
+    const chat  = model.startChat({ history });
+    const result = await chat.sendMessage(lastMessage.content);
+    const replyText = result.response.text()?.trim()
       || "Sorry, I couldn't process that. Please try again.";
 
     return res.json({
