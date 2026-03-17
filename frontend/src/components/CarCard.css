@@ -144,3 +144,19 @@
   display: flex;
   gap: 0.5rem;
 }
+
+/* Request Inspection button on card */
+.carcard-insp-btn {
+  width: 100%;
+  margin-top: 0.6rem;
+  padding: 0.42rem 0.75rem;
+  background: linear-gradient(135deg, #4f46e5, #7c3aed);
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  font-size: 0.78rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: opacity 0.15s;
+}
+.carcard-insp-btn:hover { opacity: 0.88; }

@@ -94,9 +94,31 @@ const CarForm = ({
     setRcPreview(null);
   }, [mergedInitialValues, initialValues]);
 
+  const [validationErrors, setValidationErrors] = useState({});
+
+  const validate = () => {
+    const errors = {};
+    if (!form.title.trim())       errors.title = "Title is required";
+    if (!form.brand.trim())       errors.brand = "Brand is required";
+    if (!form.model.trim())       errors.model = "Model is required";
+    if (!form.year)               errors.year  = "Year is required";
+    else if (form.year < 1990 || form.year > new Date().getFullYear() + 1)
+                                  errors.year  = `Year must be between 1990 and ${new Date().getFullYear() + 1}`;
+    if (!form.price || Number(form.price) <= 0)
+                                  errors.price = "Enter a valid price";
+    if (!form.kilometersDriven && Number(form.kilometersDriven) !== 0)
+                                  errors.kilometersDriven = "KM driven is required";
+    if (!form.location.trim())    errors.location = "Location is required";
+    if (!form.description.trim()) errors.description = "Description is required";
+    return errors;
+  };
+
   const handleChange = (e) => {
     const { name, value } = e.target;
     setForm((prev) => ({ ...prev, [name]: value }));
+    if (validationErrors[name]) {
+      setValidationErrors((prev) => { const next = { ...prev }; delete next[name]; return next; });
+    }
   };
 
   const handleRcDetailsChange = (e) => {
@@ -161,6 +183,15 @@ const CarForm = ({
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    const errors = validate();
+    if (Object.keys(errors).length > 0) {
+      setValidationErrors(errors);
+      /* Scroll to first error */
+      const firstField = Object.keys(errors)[0];
+      document.getElementById(firstField)?.scrollIntoView({ behavior: "smooth", block: "center" });
+      return;
+    }
+    setValidationErrors({});
     const rcAvailable = hasExistingRC && !rcRemoved;
     if (!rcFile && !rcAvailable) {
       setRcError("RC document is required. Please upload the Registration Certificate.");
@@ -300,23 +331,33 @@ const CarForm = ({
         <div className="car-form-grid">
           <div className="field">
             <label htmlFor="title">Listing Title *</label>
-            <input id="title" name="title" value={form.title} onChange={handleChange} required placeholder="e.g. 2020 Maruti Swift VXI" />
+            <input id="title" name="title" value={form.title} onChange={handleChange} required placeholder="e.g. 2020 Maruti Swift VXI"
+              className={validationErrors.title ? "field-input--error" : ""} />
+            {validationErrors.title && <span className="field-error">{validationErrors.title}</span>}
           </div>
           <div className="field">
             <label htmlFor="brand">Brand *</label>
-            <input id="brand" name="brand" value={form.brand} onChange={handleChange} required placeholder="e.g. Maruti Suzuki" />
+            <input id="brand" name="brand" value={form.brand} onChange={handleChange} required placeholder="e.g. Maruti Suzuki"
+              className={validationErrors.brand ? "field-input--error" : ""} />
+            {validationErrors.brand && <span className="field-error">{validationErrors.brand}</span>}
           </div>
           <div className="field">
             <label htmlFor="model">Model *</label>
-            <input id="model" name="model" value={form.model} onChange={handleChange} required placeholder="e.g. Swift VXI" />
+            <input id="model" name="model" value={form.model} onChange={handleChange} required placeholder="e.g. Swift VXI"
+              className={validationErrors.model ? "field-input--error" : ""} />
+            {validationErrors.model && <span className="field-error">{validationErrors.model}</span>}
           </div>
           <div className="field">
             <label htmlFor="year">Year *</label>
-            <input id="year" name="year" type="number" min="1990" max={new Date().getFullYear() + 1} value={form.year} onChange={handleChange} required />
+            <input id="year" name="year" type="number" min="1990" max={new Date().getFullYear() + 1} value={form.year} onChange={handleChange} required
+              className={validationErrors.year ? "field-input--error" : ""} />
+            {validationErrors.year && <span className="field-error">{validationErrors.year}</span>}
           </div>
           <div className="field">
             <label htmlFor="price">Price (₹) *</label>
-            <input id="price" name="price" type="number" min="0" value={form.price} onChange={handleChange} required />
+            <input id="price" name="price" type="number" min="0" value={form.price} onChange={handleChange} required
+              className={validationErrors.price ? "field-input--error" : ""} />
+            {validationErrors.price && <span className="field-error">{validationErrors.price}</span>}
           </div>
           <div className="field">
             <label htmlFor="fuelType">Fuel Type *</label>

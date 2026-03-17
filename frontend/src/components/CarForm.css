@@ -649,3 +649,25 @@
   padding: 0.75rem 2rem !important;
   font-size: 1rem !important;
 }
+
+/* ── Validation errors ── */
+.field-error {
+  display: block;
+  margin-top: 0.25rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #dc2626;
+  animation: fadeIn 0.15s ease;
+}
+.field-input--error {
+  border-color: #dc2626 !important;
+  background: #fff8f8 !important;
+}
+.field-input--error:focus {
+  border-color: #dc2626 !important;
+  box-shadow: 0 0 0 3px rgba(220, 38, 38, 0.1) !important;
+}
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(-4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}

@@ -264,8 +264,27 @@ export const getCars = async (req, res, next) => {
       filters.ownerId = req.user.id;
       delete filters.status;
     }
-    const cars = await Car.find(filters).sort({ createdAt: -1 });
-    res.json(cars);
+
+    /* Pagination */
+    const page  = Math.max(1, parseInt(req.query.page  || "1",  10));
+    const limit = Math.min(48, Math.max(1, parseInt(req.query.limit || "12", 10)));
+    const skip  = (page - 1) * limit;
+
+    const [cars, total] = await Promise.all([
+      Car.find(filters).sort({ featured: -1, createdAt: -1 }).skip(skip).limit(limit),
+      Car.countDocuments(filters),
+    ]);
+
+    res.json({
+      cars,
+      pagination: {
+        page,
+        limit,
+        total,
+        totalPages: Math.ceil(total / limit),
+        hasMore: page * limit < total,
+      },
+    });
   } catch (error) {
     next(error);
   }

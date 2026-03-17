@@ -1,4 +1,5 @@
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
+import { memo } from "react";
 import "./CarCard.css";
 
 const placeholder =
@@ -19,14 +20,20 @@ const healthScore = (hc) => {
   return Math.round((values.reduce((a, b) => a + b, 0) / (values.length * 5)) * 100);
 };
 
-const CarCard = ({ car, adminActions }) => {
-  const score = healthScore(car.healthCheck);
-  const scoreColor = score === null ? null : score >= 80 ? "#16a34a" : score >= 60 ? "#d97706" : "#dc2626";
+const CarCard = ({ car, adminActions, currentUserId }) => {
+  const navigate  = useNavigate();
+  const score     = healthScore(car.healthCheck);
+  const scoreColor =
+    score === null ? null :
+    score >= 80 ? "#16a34a" :
+    score >= 60 ? "#d97706" : "#dc2626";
+
+  const isOwner = currentUserId && car.ownerId === currentUserId;
 
   return (
     <article className="carcard">
       <Link to={`/cars/${car._id}`} className="carcard-img-wrap">
-        <img src={car.images?.[0]?.url || placeholder} alt={car.title} className="carcard-img" />
+        <img src={car.images?.[0]?.url || placeholder} alt={car.title} className="carcard-img" loading="lazy" />
         <div className="carcard-badges">
           {car.featured && <span className="carcard-badge carcard-badge--featured">⭐ Featured</span>}
           {car.rcVerified && <span className="carcard-badge carcard-badge--verified">✓ RC Verified</span>}
@@ -55,10 +62,25 @@ const CarCard = ({ car, adminActions }) => {
           <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
           {car.city || car.location}
         </p>
+
+        {/* Request Inspection button — shown to non-owners */}
+        {!isOwner && !adminActions && (
+          <button
+            type="button"
+            className="carcard-insp-btn"
+            onClick={(e) => {
+              e.preventDefault();
+              navigate(`/inspections?car=${car._id}&title=${encodeURIComponent(car.title)}`);
+            }}
+          >
+            🔍 Request Inspection
+          </button>
+        )}
+
         {adminActions && <div className="carcard-actions">{adminActions}</div>}
       </div>
     </article>
   );
 };
 
-export default CarCard;
+export default memo(CarCard);

@@ -1,8 +1,10 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import CarCard from "../components/CarCard";
 import CarFilters from "../components/CarFilters";
+import Spinner from "../components/Spinner";
 import useCars from "../hooks/useCars";
+import useDebounce from "../hooks/useDebounce";
 import { getStoredUser } from "../services/authService";
 import { startConversation } from "../services/messageService";
 import "./HomePage.css";
@@ -36,7 +38,22 @@ const HomePage = () => {
     return active;
   }, [filters]);
 
-  const { cars, loading, error } = useCars(queryParams);
+  /* Debounce text inputs (search, city, area, model) to avoid API call every keystroke */
+  const debouncedParams = useDebounce(queryParams, 400);
+
+  const { cars, loading, error, hasMore, total, loadingMore, loadMore } = useCars(debouncedParams);
+
+  /* Infinite scroll sentinel */
+  const sentinelRef = useRef(null);
+  useEffect(() => {
+    if (!sentinelRef.current) return;
+    const observer = new IntersectionObserver(
+      (entries) => { if (entries[0].isIntersecting && hasMore && !loadingMore) loadMore(); },
+      { threshold: 0.1 }
+    );
+    observer.observe(sentinelRef.current);
+    return () => observer.disconnect();
+  }, [hasMore, loadingMore, loadMore]);
   const [chatError, setChatError] = useState("");
   const [emiOpen, setEmiOpen]     = useState(false);
   const [emiPrice, setEmiPrice]   = useState(500000);
@@ -146,7 +163,7 @@ const HomePage = () => {
               {Object.values(queryParams).some(Boolean) ? "Search Results" : "All Cars"}
             </h2>
             <p className="listings-count">
-              {loading ? "Loading..." : `${cars.length} car${cars.length !== 1 ? "s" : ""} found`}
+              {loading ? "Loading..." : `${total} car${total !== 1 ? "s" : ""} found`}
             </p>
           </div>
           <div className="listings-header-right">
@@ -229,6 +246,14 @@ const HomePage = () => {
               </div>
             ))}
           </div>
+        )}
+
+        {/* Infinite scroll sentinel + load more spinner */}
+        {!loading && hasMore && (
+          <>
+            <div ref={sentinelRef} style={{ height: 1 }} />
+            {loadingMore && <Spinner size="sm" text="Loading more cars..." />}
+          </>
         )}
 
         {!loading && cars.length === 0 && (

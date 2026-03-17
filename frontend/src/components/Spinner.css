@@ -1,0 +1,28 @@
+.spinner-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  padding: 2rem;
+}
+
+.spinner {
+  border: 3px solid #e4ebf3;
+  border-top-color: #0b6ef3;
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+}
+
+.spinner-wrap--sm .spinner { width: 20px; height: 20px; border-width: 2px; }
+.spinner-wrap--md .spinner { width: 36px; height: 36px; }
+.spinner-wrap--lg .spinner { width: 52px; height: 52px; border-width: 4px; }
+
+.spinner-text {
+  margin: 0;
+  font-size: 0.85rem;
+  color: #7a96b4;
+  font-weight: 500;
+}
+
+@keyframes spin { to { transform: rotate(360deg); } }
