@@ -1,55 +1,21 @@
-import {
-  GoogleGenerativeAI,
-  HarmBlockThreshold,
-  HarmCategory,
-} from "@google/generative-ai";
+import { GoogleGenerativeAI } from "@google/generative-ai";
 
-const SYSTEM_INSTRUCTION =
-  "You are a professional assistant for an Indian vehicle portal. Help users with registration, insurance, and RC queries.";
+const SYSTEM_PROMPT = `You are DreamBot, the friendly and helpful AI customer support assistant for DreamCar — an online car marketplace based in India where car dealers can list cars for sale and buyers can browse listings, contact dealers, and communicate via chat.
 
-const SAFETY_SETTINGS = [
-  {
-    category: HarmCategory.HARM_CATEGORY_HARASSMENT,
-    threshold: HarmBlockThreshold.BLOCK_ONLY_HIGH,
-  },
-  {
-    category: HarmCategory.HARM_CATEGORY_HATE_SPEECH,
-    threshold: HarmBlockThreshold.BLOCK_ONLY_HIGH,
-  },
-  {
-    category: HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT,
-    threshold: HarmBlockThreshold.BLOCK_ONLY_HIGH,
-  },
-  {
-    category: HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT,
-    threshold: HarmBlockThreshold.BLOCK_ONLY_HIGH,
-  },
-];
+Your role is to help users navigate and use the DreamCar platform. Keep answers concise, friendly, and practical.
 
-const toModelRole = (role) => {
-  if (role === "assistant" || role === "model") return "model";
-  return "user";
-};
+Platform features you know about:
+- BUYING: Browse the homepage to see all car listings. Filter by location, price, year, brand. Click any car card to view full details and contact the dealer.
+- CONTACTING DEALER: On any car detail page there is a "Contact Dealer" or "Message Dealer" button. This opens a chat thread with that dealer. You can also visit the Messages page to see all your conversations.
+- SELLING / LISTING A CAR: Log in, click "Sell Car" in the navigation bar. Fill out the car listing form with title, price, year, location, description, photos, and RC document.
+- RC DOCUMENT: When listing a car, you must upload the vehicle's Registration Certificate (RC). This is stored securely and is never visible to buyers. It verifies ownership.
+- MESSAGES: The Messages page shows all your conversations. Left sidebar lists all chat threads. Click a thread to open the chat window.
+- PROFILE: Click "Profile" in the navigation. You can update your name, username, bio, phone, location, and profile photo.
+- LOGIN: DreamCar uses Google Sign-In. Click "Login" and sign in with your Google account.
+- EDITING/DELETING LISTINGS: Go to Profile page, find your listing, and use the Edit or Delete buttons on each car card.
+- ACCOUNT ISSUES: If you cannot log in, try a different Google account or clear your browser cache.
 
-const normalizeHistory = (messages) => {
-  if (!Array.isArray(messages) || !messages.length) return [];
-
-  const candidates = messages
-    .filter((m) => typeof m?.content === "string" && m.content.trim())
-    .map((m) => ({
-      role: toModelRole(m.role),
-      parts: [{ text: m.content.trim() }],
-    }));
-
-  const alternated = [];
-  for (const message of candidates) {
-    if (!alternated.length || alternated[alternated.length - 1].role !== message.role) {
-      alternated.push(message);
-    }
-  }
-
-  return alternated;
-};
+Always be helpful. If you don't know something platform-specific, say so honestly.`;
 
 export const handleChatSupport = async (req, res) => {
   try {
@@ -59,57 +25,38 @@ export const handleChatSupport = async (req, res) => {
     }
 
     const messages = Array.isArray(req.body?.messages) ? req.body.messages : [];
-    const userInput =
-      String(req.body?.userInput || "").trim() ||
-      String(req.body?.question || "").trim() ||
-      (() => {
-        const last = [...messages].reverse().find((m) => toModelRole(m?.role) === "user");
-        return String(last?.content || "").trim();
-      })();
+    const sanitized = messages
+      .filter((m) => ["user", "assistant"].includes(m.role) && typeof m.content === "string" && m.content.trim())
+      .slice(-20);
 
-    if (!userInput) {
-      return res.status(400).json({ message: "userInput is required" });
+    if (!sanitized.length) {
+      return res.status(400).json({ message: "messages array is required" });
     }
 
     const genAI = new GoogleGenerativeAI(apiKey);
     const model = genAI.getGenerativeModel({
-      model: "gemini-2.5-flash",
-      systemInstruction: SYSTEM_INSTRUCTION,
-      safetySettings: SAFETY_SETTINGS,
+      model: "gemini-2.0-flash-lite",
+      systemInstruction: SYSTEM_PROMPT,
     });
 
-    const rawHistory = normalizeHistory(messages);
-    const history = rawHistory.slice(0, -1);
+    /* Gemini uses "model" role instead of "assistant" */
+    const history = sanitized.slice(0, -1).map((m) => ({
+      role: m.role === "assistant" ? "model" : "user",
+      parts: [{ text: m.content }],
+    }));
 
-    const chat = model.startChat({ history: history || [] });
-    const result = await chat.sendMessage(userInput);
+    const lastMessage = sanitized[sanitized.length - 1];
 
-    const hasCandidate = Boolean(result?.response?.candidates?.[0]);
-    if (!hasCandidate) {
-      return res.json({
-        content: [{ type: "text", text: "I couldn't process that. Can you rephrase?" }],
-      });
-    }
+    const chat  = model.startChat({ history });
+    const result = await chat.sendMessage(lastMessage.content);
+    const replyText = result.response.text()?.trim()
+      || "Sorry, I couldn't process that. Please try again.";
 
-    const replyText = result.response.text?.()?.trim() || "I couldn't process that. Can you rephrase?";
     return res.json({
       content: [{ type: "text", text: replyText }],
     });
   } catch (error) {
-    const status = error?.status ?? error?.response?.status;
-    const message = error?.message || String(error);
-
-    if (status === 404 || /(^|\D)404(\D|$)/.test(message)) {
-      console.error('Gemini 404: model "gemini-2.5-flash" may be unavailable.', message);
-      return res.status(404).json({ message: "Chat model unavailable right now." });
-    }
-
-    if (status === 400 || /(^|\D)400(\D|$)/.test(message) || /Invalid JSON payload/i.test(message)) {
-      console.error("Gemini 400 Invalid JSON payload details:", message);
-      return res.status(400).json({ message: "Invalid chat request payload." });
-    }
-
-    console.error("Chat support error:", message);
+    console.error("Chat support error:", error?.message || error);
     return res.status(500).json({ message: "Something went wrong. Please try again." });
   }
 };

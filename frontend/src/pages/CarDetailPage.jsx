@@ -1,22 +1,68 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { getCarById } from "../services/carService";
+import { getCarById, getCars } from "../services/carService";
 import { getStoredUser } from "../services/authService";
 import { startConversation } from "../services/messageService";
+import { requestInspection } from "../services/inspectionService";
+import CarCard from "../components/CarCard";
+import "./CarDetailPage.css";
 
 const fallback =
   "https://images.unsplash.com/photo-1584345604476-8ec5f452d1f2?auto=format&fit=crop&w=1200&q=80";
+
+/* ── EMI Calculator ── */
+const calcEMI = (principal, rate, months) => {
+  const r = rate / 100 / 12;
+  if (r === 0) return principal / months;
+  return (principal * r * Math.pow(1 + r, months)) / (Math.pow(1 + r, months) - 1);
+};
+
+/* ── Health Check Config ── */
+const HEALTH_FIELDS = [
+  { key: "engine",       label: "Engine",       icon: "🔧" },
+  { key: "transmission", label: "Transmission", icon: "⚙️" },
+  { key: "brakes",       label: "Brakes",       icon: "🛑" },
+  { key: "tyres",        label: "Tyres",        icon: "🔄" },
+  { key: "ac",           label: "AC & Climate", icon: "❄️" },
+  { key: "electricals",  label: "Electricals",  icon: "⚡" },
+  { key: "suspension",   label: "Suspension",   icon: "🔩" },
+  { key: "body",         label: "Body & Paint", icon: "🎨" },
+];
+
+const scoreLabel = (s) => s >= 4.5 ? "Excellent" : s >= 3.5 ? "Good" : s >= 2.5 ? "Average" : "Poor";
+const scoreColor = (s) => s >= 4 ? "#16a34a" : s >= 3 ? "#d97706" : "#dc2626";
+
+const overallHealth = (hc) => {
+  if (!hc) return null;
+  const vals = HEALTH_FIELDS.map((f) => hc[f.key]).filter((v) => v !== null && v !== undefined && v > 0);
+  if (!vals.length) return null;
+  return (vals.reduce((a, b) => a + b, 0) / vals.length).toFixed(1);
+};
 
 const CarDetailPage = () => {
   const navigate = useNavigate();
   const { id } = useParams();
   const user = getStoredUser();
-  const [car, setCar] = useState(null);
+
+  const [car, setCar]                   = useState(null);
+  const [similarCars, setSimilarCars]   = useState([]);
   const [selectedImage, setSelectedImage] = useState(0);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
-  const [chatError, setChatError] = useState("");
-  const [chatLoading, setChatLoading] = useState(false);
+  const [lightboxOpen, setLightboxOpen] = useState(false);
+  const [loading, setLoading]           = useState(true);
+  const [error, setError]               = useState("");
+  const [chatError, setChatError]       = useState("");
+  const [chatLoading, setChatLoading]   = useState(false);
+  const [rcOpen, setRcOpen]             = useState(false);
+  const [inspectionOpen, setInspectionOpen] = useState(false);
+  const [inspectionForm, setInspectionForm] = useState({ preferredDate: "", preferredTime: "Morning", location: "", notes: "" });
+  const [inspectionLoading, setInspectionLoading] = useState(false);
+  const [inspectionSuccess, setInspectionSuccess] = useState(false);
+  const [inspectionError, setInspectionError]     = useState("");
+
+  /* EMI state */
+  const [emiDownPct, setEmiDownPct]     = useState(20);
+  const [emiRate, setEmiRate]           = useState(8.5);
+  const [emiMonths, setEmiMonths]       = useState(60);
 
   useEffect(() => {
     const fetchCar = async () => {
@@ -24,6 +70,11 @@ const CarDetailPage = () => {
         setLoading(true);
         const data = await getCarById(id);
         setCar(data);
+        /* Fetch similar cars by same brand */
+        try {
+          const similar = await getCars({ brand: data.brand, status: "approved" });
+          setSimilarCars(similar.filter((c) => c._id !== id).slice(0, 4));
+        } catch { /* silent */ }
       } catch (err) {
         setError(err.response?.data?.message || "Failed to load car");
       } finally {
@@ -32,6 +83,18 @@ const CarDetailPage = () => {
     };
     fetchCar();
   }, [id]);
+
+  /* Keyboard nav for lightbox */
+  useEffect(() => {
+    if (!lightboxOpen) return;
+    const handler = (e) => {
+      if (e.key === "Escape") setLightboxOpen(false);
+      if (e.key === "ArrowRight") setSelectedImage((i) => (i + 1) % (car?.images?.length || 1));
+      if (e.key === "ArrowLeft")  setSelectedImage((i) => (i - 1 + (car?.images?.length || 1)) % (car?.images?.length || 1));
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [lightboxOpen, car]);
 
   const handleStartChat = async () => {
     try {
@@ -49,183 +112,499 @@ const CarDetailPage = () => {
     }
   };
 
-  if (loading) return <p>Loading car details...</p>;
-  if (error) return <p style={{ color: "#c63030" }}>{error}</p>;
-  if (!car) return <p>Car not found.</p>;
+  const handleInspectionSubmit = async (e) => {
+    e.preventDefault();
+    try {
+      setInspectionLoading(true);
+      setInspectionError("");
+      await requestInspection(car._id, {
+        ...inspectionForm,
+        location: inspectionForm.location || car.location,
+      });
+      setInspectionSuccess(true);
+      setInspectionOpen(false);
+    } catch (err) {
+      setInspectionError(err.response?.data?.message || "Failed to submit request");
+    } finally {
+      setInspectionLoading(false);
+    }
+  };
 
-  const images = car.images?.length ? car.images : [{ url: fallback }];
-  const isOwner = car.ownerId && car.ownerId === user?.id;
+  /* ── Loading ── */
+  if (loading) {
+    return (
+      <div className="cdp-skeleton">
+        <div className="skel skel-img-lg" />
+        <div className="cdp-skeleton-body">
+          <div className="skel skel-line skel-xl" />
+          <div className="skel skel-line skel-lg" />
+          <div className="skel skel-line skel-md" />
+        </div>
+      </div>
+    );
+  }
+  if (error) return <div className="cdp-error"><p>⚠ {error}</p><button className="btn btn-secondary" onClick={() => navigate(-1)}>← Go Back</button></div>;
+  if (!car)  return <div className="cdp-error"><p>Car not found.</p></div>;
+
+  const images   = car.images?.length ? car.images : [{ url: fallback }];
+  const isOwner  = car.ownerId && car.ownerId === user?.id;
+  const health   = overallHealth(car.healthCheck);
+
+  const loanAmount    = car.price * (1 - emiDownPct / 100);
+  const monthlyEMI    = calcEMI(loanAmount, emiRate, emiMonths);
+  const totalPayable  = monthlyEMI * emiMonths + car.price * (emiDownPct / 100);
+  const totalInterest = totalPayable - car.price;
 
   return (
-    <section>
-      <div className="grid" style={{ gridTemplateColumns: "repeat(auto-fit,minmax(280px,1fr))", gap: "1.5rem" }}>
+    <div className="cdp">
 
-        {/* ── Image gallery ── */}
-        <div>
-          <div className="card" style={{ overflow: "hidden", position: "relative" }}>
-            <img
-              src={images[selectedImage]?.url || fallback}
-              alt={car.title}
-              style={{ width: "100%", height: 280, objectFit: "cover", display: "block" }}
-            />
-            {/* RC Verified badge on main image */}
-            {car.rcVerified && (
-              <span style={{
-                position: "absolute", top: 12, left: 12,
-                background: "linear-gradient(135deg,#177245,#22c55e)",
-                color: "#fff", fontSize: "0.75rem", fontWeight: 700,
-                padding: "0.3rem 0.7rem", borderRadius: 20,
-                boxShadow: "0 2px 8px rgba(0,0,0,0.2)",
-              }}>
-                ✓ RC Verified
-              </span>
-            )}
-            {car.rcDocument?.publicId && !car.rcVerified && (
-              <span style={{
-                position: "absolute", top: 12, left: 12,
-                background: "rgba(11,110,243,0.92)",
-                color: "#fff", fontSize: "0.75rem", fontWeight: 700,
-                padding: "0.3rem 0.7rem", borderRadius: 20,
-                boxShadow: "0 2px 8px rgba(0,0,0,0.2)",
-              }}>
-                📄 RC Uploaded
-              </span>
-            )}
-          </div>
-
-          {/* Thumbnail strip */}
-          {images.length > 1 && (
-            <div style={{ display: "flex", gap: "0.5rem", marginTop: "0.5rem", flexWrap: "wrap" }}>
-              {images.map((img, idx) => (
-                <button
-                  key={idx}
-                  type="button"
-                  onClick={() => setSelectedImage(idx)}
-                  style={{
-                    padding: 0, border: "none", cursor: "pointer",
-                    borderRadius: 8, overflow: "hidden",
-                    outline: selectedImage === idx ? "2.5px solid #0b6ef3" : "2px solid transparent",
-                  }}
-                >
-                  <img
-                    src={img.url}
-                    alt={`View ${idx + 1}`}
-                    style={{ width: 60, height: 46, objectFit: "cover", display: "block" }}
-                  />
-                </button>
-              ))}
-            </div>
-          )}
+      {/* ════════════════════════════════════════
+          LIGHTBOX
+      ════════════════════════════════════════ */}
+      {lightboxOpen && (
+        <div className="cdp-lightbox" onClick={() => setLightboxOpen(false)}>
+          <button className="cdp-lightbox-close" onClick={() => setLightboxOpen(false)}>✕</button>
+          <button className="cdp-lightbox-arrow cdp-lightbox-arrow--left"
+            onClick={(e) => { e.stopPropagation(); setSelectedImage((i) => (i - 1 + images.length) % images.length); }}>
+            ‹
+          </button>
+          <img
+            src={images[selectedImage]?.url || fallback}
+            alt={car.title}
+            className="cdp-lightbox-img"
+            onClick={(e) => e.stopPropagation()}
+          />
+          <button className="cdp-lightbox-arrow cdp-lightbox-arrow--right"
+            onClick={(e) => { e.stopPropagation(); setSelectedImage((i) => (i + 1) % images.length); }}>
+            ›
+          </button>
+          <div className="cdp-lightbox-counter">{selectedImage + 1} / {images.length}</div>
         </div>
+      )}
 
-        {/* ── Car details ── */}
-        <div>
-          <h1 style={{ marginTop: 0, fontSize: "1.4rem" }}>{car.title}</h1>
-          <h2 style={{ marginTop: 0, color: "#0b6ef3", fontSize: "1.5rem" }}>
-            INR {Number(car.price).toLocaleString("en-IN")}
-          </h2>
+      {/* ════════════════════════════════════════
+          BREADCRUMB
+      ════════════════════════════════════════ */}
+      <nav className="cdp-breadcrumb">
+        <Link to="/">Home</Link>
+        <span>›</span>
+        <Link to="/">{car.brand}</Link>
+        <span>›</span>
+        <span>{car.title}</span>
+      </nav>
 
-          {/* Specs grid */}
-          <div style={{
-            display: "grid", gridTemplateColumns: "1fr 1fr",
-            gap: "0.6rem", marginBottom: "1rem",
-          }}>
-            {[
-              ["Brand", car.brand],
-              ["Model", car.model],
-              ["Year", car.year],
-              ["Fuel Type", car.fuelType],
-              ["Transmission", car.transmission],
-              ["KM Driven", `${Number(car.kilometersDriven).toLocaleString("en-IN")} km`],
-              ["Location", car.location],
-            ].map(([label, value]) => (
-              <div key={label} className="card" style={{ padding: "0.6rem 0.8rem" }}>
-                <div style={{ fontSize: "0.72rem", color: "#7a96b4", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.04em", marginBottom: "0.15rem" }}>
-                  {label}
-                </div>
-                <div style={{ fontSize: "0.9rem", fontWeight: 700, color: "#0c1f36" }}>{value}</div>
+      {/* ════════════════════════════════════════
+          MAIN LAYOUT
+      ════════════════════════════════════════ */}
+      <div className="cdp-layout">
+
+        {/* ── LEFT: Images + Details ── */}
+        <div className="cdp-left">
+
+          {/* Gallery */}
+          <div className="cdp-gallery card">
+            <div className="cdp-gallery-main" onClick={() => setLightboxOpen(true)}>
+              <img
+                src={images[selectedImage]?.url || fallback}
+                alt={car.title}
+                className="cdp-gallery-main-img"
+              />
+              <div className="cdp-gallery-badges">
+                {car.featured  && <span className="cdp-badge cdp-badge--featured">⭐ Featured</span>}
+                {car.rcVerified && <span className="cdp-badge cdp-badge--verified">✓ RC Verified</span>}
+                {car.rcDocument?.publicId && !car.rcVerified && <span className="cdp-badge cdp-badge--uploaded">📄 RC Uploaded</span>}
               </div>
-            ))}
+              {health && (
+                <div className="cdp-gallery-health" style={{ background: scoreColor(parseFloat(health)) }}>
+                  {Math.round((parseFloat(health) / 5) * 100)}% Health
+                </div>
+              )}
+              <div className="cdp-gallery-expand">🔍 Click to expand</div>
+            </div>
+
+            {images.length > 1 && (
+              <div className="cdp-gallery-thumbs">
+                {images.map((img, idx) => (
+                  <button
+                    key={idx}
+                    type="button"
+                    className={`cdp-thumb ${selectedImage === idx ? "cdp-thumb--active" : ""}`}
+                    onClick={() => setSelectedImage(idx)}
+                  >
+                    <img src={img.url} alt={`View ${idx + 1}`} />
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
 
-          <p style={{ color: "#2a3f58", lineHeight: 1.6, fontSize: "0.9rem" }}>{car.description}</p>
-
-          {car.rcDetails ? (
-            <div className="card" style={{ padding: "0.9rem", marginBottom: "0.9rem" }}>
-              <p style={{ margin: "0 0 0.45rem", fontWeight: 700 }}>RC Confirmed Details</p>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.45rem" }}>
-                {car.rcDetails.registrationNumber ? <p style={{ margin: 0 }}>Reg No: {car.rcDetails.registrationNumber}</p> : null}
-                {car.rcDetails.ownerName ? <p style={{ margin: 0 }}>Owner: {car.rcDetails.ownerName}</p> : null}
-                {car.rcDetails.manufacturer ? <p style={{ margin: 0 }}>Manufacturer: {car.rcDetails.manufacturer}</p> : null}
-                {car.rcDetails.vehicleModel ? <p style={{ margin: 0 }}>Model: {car.rcDetails.vehicleModel}</p> : null}
-                {car.rcDetails.fuelType ? <p style={{ margin: 0 }}>Fuel: {car.rcDetails.fuelType}</p> : null}
-                {car.rcDetails.manufacturingYear ? <p style={{ margin: 0 }}>Mfg Year: {car.rcDetails.manufacturingYear}</p> : null}
-                {car.rcDetails.registrationDate ? <p style={{ margin: 0 }}>Reg Date: {car.rcDetails.registrationDate}</p> : null}
-                {car.rcDetails.rtoOffice ? <p style={{ margin: 0 }}>RTO: {car.rcDetails.rtoOffice}</p> : null}
-                {car.rcDetails.engineNumber ? <p style={{ margin: 0 }}>Engine: {car.rcDetails.engineNumber}</p> : null}
-                {car.rcDetails.chassisNumber ? <p style={{ margin: 0 }}>Chassis: {car.rcDetails.chassisNumber}</p> : null}
-                {car.rcDetails.vehicleColor ? <p style={{ margin: 0 }}>Color: {car.rcDetails.vehicleColor}</p> : null}
-                {car.rcDetails.seatingCapacity ? <p style={{ margin: 0 }}>Seats: {car.rcDetails.seatingCapacity}</p> : null}
-              </div>
-            </div>
-          ) : null}
-
-          <p style={{ color: "#7a96b4", fontSize: "0.82rem" }}>
-            Posted on {new Date(car.createdAt).toLocaleDateString("en-IN", { year: "numeric", month: "long", day: "numeric" })}
-          </p>
-
-          {/* ── Dealer info card ── */}
-          <div className="card" style={{ padding: "1rem", marginBottom: "1rem" }}>
-            <p style={{ margin: "0 0 0.35rem", fontSize: "0.75rem", fontWeight: 600, color: "#7a96b4", textTransform: "uppercase", letterSpacing: "0.04em" }}>
-              Posted by
-            </p>
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "0.75rem" }}>
-              <div>
-                <p style={{ margin: "0 0 0.15rem", fontWeight: 700, color: "#0c1f36", fontSize: "0.95rem" }}>
-                  {car.ownerName || "Dealer"}
-                </p>
-                {car.ownerEmail && (
-                  <p style={{ margin: 0, color: "#7a96b4", fontSize: "0.82rem" }}>{car.ownerEmail}</p>
+          {/* ── Health Check Section ── */}
+          {car.healthCheck && Object.values(car.healthCheck).some((v) => v !== null && v > 0) && (
+            <div className="cdp-section card">
+              <div className="cdp-section-header">
+                <h2 className="cdp-section-title">🔍 Car Health Inspection</h2>
+                {health && (
+                  <div className="cdp-health-overall" style={{ background: scoreColor(parseFloat(health)) }}>
+                    {health}/5 — {scoreLabel(parseFloat(health))}
+                  </div>
                 )}
               </div>
-              {car.ownerId && (
-                <Link
-                  to={`/dealer/${car.ownerId}`}
-                  className="btn btn-secondary"
-                  style={{ fontSize: "0.82rem", padding: "0.45rem 0.85rem", whiteSpace: "nowrap" }}
+
+              {/* Overall score ring */}
+              {health && (
+                <div className="cdp-health-summary">
+                  <div className="cdp-health-ring" style={{ "--pct": `${Math.round((parseFloat(health) / 5) * 100)}` }}>
+                    <svg viewBox="0 0 80 80">
+                      <circle cx="40" cy="40" r="32" fill="none" stroke="#e4ebf3" strokeWidth="8" />
+                      <circle
+                        cx="40" cy="40" r="32" fill="none"
+                        stroke={scoreColor(parseFloat(health))}
+                        strokeWidth="8"
+                        strokeDasharray={`${Math.round((parseFloat(health) / 5) * 201)} 201`}
+                        strokeLinecap="round"
+                        transform="rotate(-90 40 40)"
+                      />
+                    </svg>
+                    <div className="cdp-health-ring-text">
+                      <span className="cdp-health-ring-score">{Math.round((parseFloat(health) / 5) * 100)}%</span>
+                      <span className="cdp-health-ring-label">Overall</span>
+                    </div>
+                  </div>
+                  <div className="cdp-health-legend">
+                    <div className="cdp-health-legend-item"><span style={{background:"#16a34a"}} />Excellent (4–5)</div>
+                    <div className="cdp-health-legend-item"><span style={{background:"#d97706"}} />Good (3–4)</div>
+                    <div className="cdp-health-legend-item"><span style={{background:"#dc2626"}} />Needs Attention (&lt;3)</div>
+                  </div>
+                </div>
+              )}
+
+              {/* Individual bars */}
+              <div className="cdp-health-bars">
+                {HEALTH_FIELDS.map(({ key, label, icon }) => {
+                  const val = car.healthCheck?.[key];
+                  if (val === null || val === undefined || val === 0) return null;
+                  const pct = (val / 5) * 100;
+                  const col = scoreColor(val);
+                  return (
+                    <div key={key} className="cdp-health-bar-row">
+                      <div className="cdp-health-bar-label">
+                        <span>{icon} {label}</span>
+                        <span className="cdp-health-bar-score" style={{ color: col }}>{val}/5</span>
+                      </div>
+                      <div className="cdp-health-bar-track">
+                        <div
+                          className="cdp-health-bar-fill"
+                          style={{ width: `${pct}%`, background: col }}
+                        />
+                      </div>
+                      <span className="cdp-health-bar-tag" style={{ color: col }}>{scoreLabel(val)}</span>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {car.healthCheck?.inspectedAt && (
+                <p className="cdp-health-inspected">
+                  Inspected on {new Date(car.healthCheck.inspectedAt).toLocaleDateString("en-IN", { year:"numeric", month:"long", day:"numeric" })}
+                  {car.healthCheck.inspectedBy && ` by ${car.healthCheck.inspectedBy}`}
+                </p>
+              )}
+            </div>
+          )}
+
+          {/* ── RC Details (collapsible) ── */}
+          {car.rcDetails && Object.values(car.rcDetails).some(Boolean) && (
+            <div className="cdp-section card">
+              <button
+                type="button"
+                className="cdp-collapsible-btn"
+                onClick={() => setRcOpen((v) => !v)}
+              >
+                <span>📄 RC Confirmed Details</span>
+                <span className="cdp-collapsible-arrow">{rcOpen ? "▲" : "▼"}</span>
+              </button>
+              {rcOpen && (
+                <div className="cdp-rc-grid">
+                  {[
+                    ["Reg Number",      car.rcDetails.registrationNumber],
+                    ["Owner Name",      car.rcDetails.ownerName],
+                    ["Manufacturer",    car.rcDetails.manufacturer],
+                    ["Vehicle Model",   car.rcDetails.vehicleModel],
+                    ["Fuel Type",       car.rcDetails.fuelType],
+                    ["Mfg Year",        car.rcDetails.manufacturingYear],
+                    ["Reg Date",        car.rcDetails.registrationDate],
+                    ["RTO Office",      car.rcDetails.rtoOffice],
+                    ["Engine No.",      car.rcDetails.engineNumber],
+                    ["Chassis No.",     car.rcDetails.chassisNumber],
+                    ["Color",           car.rcDetails.vehicleColor],
+                    ["Seating",         car.rcDetails.seatingCapacity],
+                  ].filter(([, v]) => v).map(([label, value]) => (
+                    <div key={label} className="cdp-rc-item">
+                      <span className="cdp-rc-label">{label}</span>
+                      <span className="cdp-rc-value">{value}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Description */}
+          <div className="cdp-section card">
+            <h2 className="cdp-section-title">About this Car</h2>
+            <p className="cdp-description">{car.description}</p>
+            <p className="cdp-posted-date">
+              Listed on {new Date(car.createdAt).toLocaleDateString("en-IN", { year:"numeric", month:"long", day:"numeric" })}
+            </p>
+          </div>
+
+        </div>{/* end cdp-left */}
+
+        {/* ── RIGHT: Price + Specs + EMI + Dealer ── */}
+        <div className="cdp-right">
+
+          {/* Price card */}
+          <div className="cdp-price-card card">
+            <div className="cdp-price-header">
+              {car.featured && <span className="cdp-badge cdp-badge--featured" style={{marginBottom:"0.5rem",display:"inline-block"}}>⭐ Featured</span>}
+              <h1 className="cdp-title">{car.title}</h1>
+              <div className="cdp-price">₹{Number(car.price).toLocaleString("en-IN")}</div>
+              <div className="cdp-emi-hint">
+                EMI from ₹{Math.round(calcEMI(car.price * 0.8, 8.5, 60)).toLocaleString("en-IN")}/mo
+              </div>
+            </div>
+
+            {/* Spec chips */}
+            <div className="cdp-spec-chips">
+              {[
+                { label: car.year,         icon: "📅" },
+                { label: `${Number(car.kilometersDriven).toLocaleString("en-IN")} km`, icon: "🛣" },
+                { label: car.fuelType,     icon: car.fuelType === "Electric" ? "⚡" : "⛽" },
+                { label: car.transmission, icon: "⚙️" },
+                { label: car.city || car.location, icon: "📍" },
+              ].map(({ label, icon }) => (
+                <span key={label} className="cdp-spec-chip">
+                  {icon} {label}
+                </span>
+              ))}
+            </div>
+
+            {/* Action buttons */}
+            {chatError && <p className="cdp-chat-error">⚠ {chatError}</p>}
+            {inspectionSuccess && (
+              <div className="cdp-inspection-success">
+                ✅ Inspection request submitted! Our team will contact you shortly.
+              </div>
+            )}
+            {!isOwner && car.ownerId && (
+              <div className="cdp-actions">
+                <button
+                  type="button"
+                  className="btn btn-primary cdp-btn-full"
+                  onClick={handleStartChat}
+                  disabled={chatLoading}
                 >
+                  {chatLoading ? "Connecting..." : "💬 Message Seller"}
+                </button>
+                <button
+                  type="button"
+                  className="btn cdp-btn-full cdp-btn-inspection"
+                  onClick={() => setInspectionOpen(true)}
+                  disabled={inspectionSuccess}
+                >
+                  🔍 Request Inspection
+                </button>
+                <Link to={`/dealer/${car.ownerId}`} className="btn btn-secondary cdp-btn-full" style={{textAlign:"center"}}>
+                  👤 View Dealer Profile
+                </Link>
+              </div>
+            )}
+          </div>
+
+          {/* Specs table */}
+          <div className="cdp-section card">
+            <h2 className="cdp-section-title">Specifications</h2>
+            <div className="cdp-specs-table">
+              {[
+                ["Brand",        car.brand],
+                ["Model",        car.model],
+                ["Year",         car.year],
+                ["Fuel Type",    car.fuelType],
+                ["Transmission", car.transmission],
+                ["KM Driven",    `${Number(car.kilometersDriven).toLocaleString("en-IN")} km`],
+                ["Location",     car.location],
+                ...(car.city  ? [["City",  car.city]]  : []),
+                ...(car.area  ? [["Area",  car.area]]  : []),
+              ].map(([label, value]) => (
+                <div key={label} className="cdp-spec-row">
+                  <span className="cdp-spec-label">{label}</span>
+                  <span className="cdp-spec-value">{value}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* EMI Calculator */}
+          <div className="cdp-section card">
+            <h2 className="cdp-section-title">🧮 EMI Calculator</h2>
+            <div className="cdp-emi">
+              <div className="cdp-emi-result">
+                <span className="cdp-emi-monthly">₹{Math.round(monthlyEMI).toLocaleString("en-IN")}</span>
+                <span className="cdp-emi-monthly-label">per month</span>
+              </div>
+
+              <div className="cdp-emi-field">
+                <label>Down Payment: {emiDownPct}% (₹{Math.round(car.price * emiDownPct / 100).toLocaleString("en-IN")})</label>
+                <input type="range" min="10" max="50" step="5" value={emiDownPct}
+                  onChange={(e) => setEmiDownPct(Number(e.target.value))} className="cdp-slider" />
+              </div>
+
+              <div className="cdp-emi-field">
+                <label>Interest Rate: {emiRate}% p.a.</label>
+                <input type="range" min="6" max="18" step="0.5" value={emiRate}
+                  onChange={(e) => setEmiRate(Number(e.target.value))} className="cdp-slider" />
+              </div>
+
+              <div className="cdp-emi-field">
+                <label>Tenure: {emiMonths} months ({emiMonths / 12} years)</label>
+                <input type="range" min="12" max="84" step="12" value={emiMonths}
+                  onChange={(e) => setEmiMonths(Number(e.target.value))} className="cdp-slider" />
+              </div>
+
+              <div className="cdp-emi-breakdown">
+                <div className="cdp-emi-row">
+                  <span>Loan Amount</span>
+                  <span>₹{Math.round(loanAmount).toLocaleString("en-IN")}</span>
+                </div>
+                <div className="cdp-emi-row">
+                  <span>Total Interest</span>
+                  <span className="cdp-emi-interest">₹{Math.round(totalInterest).toLocaleString("en-IN")}</span>
+                </div>
+                <div className="cdp-emi-row cdp-emi-row--total">
+                  <span>Total Payable</span>
+                  <span>₹{Math.round(totalPayable).toLocaleString("en-IN")}</span>
+                </div>
+              </div>
+              <p className="cdp-emi-disclaimer">* Indicative only. Actual EMI may vary by lender.</p>
+            </div>
+          </div>
+
+          {/* Dealer card */}
+          <div className="cdp-section card">
+            <h2 className="cdp-section-title">Dealer Information</h2>
+            <div className="cdp-dealer">
+              <div className="cdp-dealer-avatar">
+                {(car.ownerName || "D")[0].toUpperCase()}
+              </div>
+              <div className="cdp-dealer-info">
+                <p className="cdp-dealer-name">{car.ownerName || "Dealer"}</p>
+                <p className="cdp-dealer-sub">Verified Seller</p>
+              </div>
+              {car.ownerId && (
+                <Link to={`/dealer/${car.ownerId}`} className="btn btn-secondary" style={{fontSize:"0.8rem",padding:"0.4rem 0.7rem",whiteSpace:"nowrap"}}>
                   View Profile →
                 </Link>
               )}
             </div>
           </div>
 
-          {/* ── Actions ── */}
-          {chatError && <p style={{ color: "#c63030", fontSize: "0.88rem" }}>{chatError}</p>}
+        </div>{/* end cdp-right */}
+      </div>{/* end cdp-layout */}
 
-          {!isOwner && car.ownerId && (
-            <div style={{ display: "flex", gap: "0.75rem", flexWrap: "wrap" }}>
-              <button
-                type="button"
-                className="btn btn-primary"
-                onClick={handleStartChat}
-                disabled={chatLoading}
-                style={{ flex: 1 }}
-              >
-                {chatLoading ? "Starting chat..." : "💬 Message Seller"}
-              </button>
-              <Link
-                to={`/dealer/${car.ownerId}`}
-                className="btn btn-secondary"
-                style={{ flex: 1, textAlign: "center" }}
-              >
-                👤 View Dealer Profile
-              </Link>
+      {/* ════════════════════════════════════════
+          INSPECTION REQUEST MODAL
+      ════════════════════════════════════════ */}
+      {inspectionOpen && (
+        <div className="cdp-lightbox" onClick={() => setInspectionOpen(false)}>
+          <div className="cdp-insp-modal card" onClick={(e) => e.stopPropagation()}>
+            <div className="cdp-insp-header">
+              <div>
+                <h2 className="cdp-insp-title">🔍 Request Inspection</h2>
+                <p className="cdp-insp-subtitle">{car.title}</p>
+              </div>
+              <button className="cdp-lightbox-close" style={{ position:"static" }} onClick={() => setInspectionOpen(false)}>✕</button>
             </div>
-          )}
+
+            <form onSubmit={handleInspectionSubmit} className="cdp-insp-form">
+              <div className="field">
+                <label>Preferred Date</label>
+                <input
+                  type="date"
+                  value={inspectionForm.preferredDate}
+                  min={new Date().toISOString().split("T")[0]}
+                  onChange={(e) => setInspectionForm((p) => ({ ...p, preferredDate: e.target.value }))}
+                />
+              </div>
+
+              <div className="field">
+                <label>Preferred Time</label>
+                <select
+                  value={inspectionForm.preferredTime}
+                  onChange={(e) => setInspectionForm((p) => ({ ...p, preferredTime: e.target.value }))}
+                >
+                  <option value="Morning">Morning (9 AM – 12 PM)</option>
+                  <option value="Afternoon">Afternoon (12 PM – 4 PM)</option>
+                  <option value="Evening">Evening (4 PM – 7 PM)</option>
+                </select>
+              </div>
+
+              <div className="field">
+                <label>Inspection Location</label>
+                <input
+                  type="text"
+                  value={inspectionForm.location}
+                  onChange={(e) => setInspectionForm((p) => ({ ...p, location: e.target.value }))}
+                  placeholder={car.location || "Enter preferred location"}
+                />
+              </div>
+
+              <div className="field">
+                <label>Additional Notes (optional)</label>
+                <textarea
+                  rows="3"
+                  value={inspectionForm.notes}
+                  onChange={(e) => setInspectionForm((p) => ({ ...p, notes: e.target.value }))}
+                  placeholder="Any specific concerns or requirements..."
+                />
+              </div>
+
+              {inspectionError && (
+                <div className="cdp-chat-error">⚠ {inspectionError}</div>
+              )}
+
+              <div className="cdp-insp-info">
+                <span>ℹ</span>
+                <span>Our team will review your request and contact you within 24 hours to confirm the inspection schedule.</span>
+              </div>
+
+              <div style={{ display:"flex", gap:"0.75rem", marginTop:"1rem" }}>
+                <button type="button" className="btn btn-secondary" style={{ flex:1 }} onClick={() => setInspectionOpen(false)}>
+                  Cancel
+                </button>
+                <button type="submit" className="btn btn-primary" style={{ flex:1 }} disabled={inspectionLoading}>
+                  {inspectionLoading ? "Submitting..." : "Submit Request"}
+                </button>
+              </div>
+            </form>
+          </div>
         </div>
-      </div>
-    </section>
+      )}
+
+      {/* ════════════════════════════════════════
+          SIMILAR CARS
+      ════════════════════════════════════════ */}
+      {similarCars.length > 0 && (
+        <div className="cdp-similar">
+          <h2 className="cdp-similar-title">Similar {car.brand} Cars</h2>
+          <div className="cdp-similar-grid">
+            {similarCars.map((c) => (
+              <CarCard key={c._id} car={c} />
+            ))}
+          </div>
+        </div>
+      )}
+
+    </div>
   );
 };
 

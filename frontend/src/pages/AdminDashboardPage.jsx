@@ -6,85 +6,469 @@ import {
   getAdminCars,
   updateAdminCar,
 } from "../services/carService";
+import {
+  getAllInspections,
+  getInspectionStats,
+  updateInspectionStatus,
+  getAllApplications,
+  reviewApplication,
+} from "../services/inspectionService";
+import "./AdminDashboardPage.css";
+
+const STATUS_COLORS = {
+  pending:   { bg: "#fef3c7", color: "#92400e", label: "Pending" },
+  approved:  { bg: "#d1fae5", color: "#065f46", label: "Approved" },
+  rejected:  { bg: "#fee2e2", color: "#991b1b", label: "Rejected" },
+  completed: { bg: "#dbeafe", color: "#1e40af", label: "Completed" },
+};
 
 const AdminDashboardPage = () => {
-  const [cars, setCars] = useState([]);
+  const [activeTab, setActiveTab]     = useState("cars");
+  const [cars, setCars]               = useState([]);
   const [selectedCar, setSelectedCar] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
+  const [carsLoading, setCarsLoading] = useState(true);
+  const [carsError, setCarsError]     = useState("");
 
+  const [inspections, setInspections]     = useState([]);
+  const [inspStats, setInspStats]         = useState(null);
+  const [inspLoading, setInspLoading]     = useState(false);
+  const [inspFilter, setInspFilter]       = useState("");
+  const [selectedInsp, setSelectedInsp]   = useState(null);
+  const [adminNotes, setAdminNotes]       = useState("");
+  const [inspectionDate, setInspectionDate] = useState("");
+  const [updatingInsp, setUpdatingInsp]   = useState(false);
+
+  const [applications, setApplications]   = useState([]);
+  const [appLoading, setAppLoading]       = useState(false);
+  const [appFilter, setAppFilter]         = useState("");
+
+  /* ── Load cars ── */
   const fetchCars = async () => {
     try {
-      setLoading(true);
+      setCarsLoading(true);
       const data = await getAdminCars();
       setCars(data);
     } catch (err) {
-      setError(err.response?.data?.message || "Failed to load admin cars");
+      setCarsError(err.response?.data?.message || "Failed to load cars");
     } finally {
-      setLoading(false);
+      setCarsLoading(false);
     }
   };
 
+  /* ── Load inspections ── */
+  const fetchInspections = async () => {
+    try {
+      setInspLoading(true);
+      const [data, stats] = await Promise.all([
+        getAllInspections(inspFilter),
+        getInspectionStats(),
+      ]);
+      setInspections(data);
+      setInspStats(stats);
+    } catch (err) {
+      console.error("Failed to load inspections", err);
+    } finally {
+      setInspLoading(false);
+    }
+  };
+
+  useEffect(() => { fetchCars(); }, []);
+  useEffect(() => { if (activeTab === "inspections") fetchInspections(); }, [activeTab, inspFilter]);
   useEffect(() => {
-    fetchCars();
-  }, []);
+    if (activeTab === "applications") {
+      setAppLoading(true);
+      getAllApplications(appFilter).then(setApplications).finally(() => setAppLoading(false));
+    }
+  }, [activeTab, appFilter]);
 
-  const handleDelete = async (id) => {
-    const confirmed = window.confirm("Delete this listing?");
-    if (!confirmed) return;
-
+  const handleDeleteCar = async (id) => {
+    if (!window.confirm("Delete this listing?")) return;
     await deleteAdminCar(id);
-    setCars((prev) => prev.filter((car) => car._id !== id));
+    setCars((prev) => prev.filter((c) => c._id !== id));
     if (selectedCar?._id === id) setSelectedCar(null);
   };
 
-  const handleUpdate = async (payload) => {
+  const handleUpdateCar = async (payload) => {
     if (!selectedCar) return;
     await updateAdminCar(selectedCar._id, payload);
     await fetchCars();
+    setSelectedCar(null);
+  };
+
+  const handleUpdateInspection = async (id, status) => {
+    try {
+      setUpdatingInsp(true);
+      await updateInspectionStatus(id, {
+        status,
+        adminNotes: adminNotes || undefined,
+        inspectionDate: inspectionDate || undefined,
+      });
+      setSelectedInsp(null);
+      setAdminNotes("");
+      setInspectionDate("");
+      await fetchInspections();
+    } catch (err) {
+      console.error("Failed to update inspection", err);
+    } finally {
+      setUpdatingInsp(false);
+    }
   };
 
   return (
-    <section>
-      <div className="section-header">
-        <h1 style={{ margin: 0 }}>Admin Dashboard</h1>
+    <div className="adm-page">
+      <div className="adm-header">
+        <h1 className="adm-title">Admin Dashboard</h1>
+        <p className="adm-sub">Manage listings, inspections and platform activity</p>
       </div>
 
-      {error ? <p style={{ color: "#c63030" }}>{error}</p> : null}
-      {loading ? <p>Loading listings...</p> : null}
+      {/* ── Tabs ── */}
+      <div className="adm-tabs">
+        <button
+          className={`adm-tab ${activeTab === "cars" ? "adm-tab--active" : ""}`}
+          onClick={() => setActiveTab("cars")}
+        >
+          🚗 Car Listings
+          <span className="adm-tab-badge">{cars.length}</span>
+        </button>
+        <button
+          className={`adm-tab ${activeTab === "inspections" ? "adm-tab--active" : ""}`}
+          onClick={() => setActiveTab("inspections")}
+        >
+          🔍 Inspections
+          {inspStats?.requested > 0 && (
+            <span className="adm-tab-badge adm-tab-badge--alert">{inspStats.requested}</span>
+          )}
+        </button>
+        <button
+          className={`adm-tab ${activeTab === "applications" ? "adm-tab--active" : ""}`}
+          onClick={() => setActiveTab("applications")}
+        >
+          ⭐ Inspector Applications
+          {inspStats?.pendingApplications > 0 && (
+            <span className="adm-tab-badge adm-tab-badge--alert">{inspStats.pendingApplications}</span>
+          )}
+        </button>
+      </div>
 
-      {selectedCar ? (
-        <div style={{ marginBottom: "1rem" }}>
-          <h2>Edit Listing</h2>
-          <CarForm
-            key={selectedCar._id}
-            initialValues={selectedCar}
-            includeStatus
-            submitLabel="Update Listing"
-            onSubmit={handleUpdate}
-          />
-        </div>
-      ) : null}
+      {/* ════════════════════════════════════
+          CARS TAB
+      ════════════════════════════════════ */}
+      {activeTab === "cars" && (
+        <div>
+          {carsError && <p style={{ color:"#dc2626" }}>{carsError}</p>}
+          {carsLoading && <p style={{ color:"#7a96b4" }}>Loading listings...</p>}
 
-      <div className="grid car-grid">
-        {cars.map((car) => (
-          <CarCard
-            key={car._id}
-            car={car}
-            adminActions={
-              <div style={{ marginTop: "0.8rem", display: "flex", gap: "0.5rem" }}>
-                <button type="button" className="btn btn-secondary" onClick={() => setSelectedCar(car)}>
-                  Edit
-                </button>
-                <button type="button" className="btn btn-danger" onClick={() => handleDelete(car._id)}>
-                  Delete
-                </button>
+          {selectedCar && (
+            <div className="adm-edit-section">
+              <div className="adm-edit-header">
+                <h2 className="adm-edit-title">✏ Edit Listing</h2>
+                <button className="btn btn-secondary" onClick={() => setSelectedCar(null)}>✕ Cancel</button>
               </div>
-            }
-          />
-        ))}
-      </div>
-    </section>
+              <CarForm
+                key={selectedCar._id}
+                initialValues={selectedCar}
+                hasExistingRC={Boolean(selectedCar.rcDocument?.publicId)}
+                includeStatus
+                submitLabel="Update Listing"
+                onSubmit={handleUpdateCar}
+              />
+            </div>
+          )}
+
+          <div className="car-grid">
+            {cars.map((car) => (
+              <CarCard
+                key={car._id}
+                car={car}
+                adminActions={
+                  <div style={{ marginTop:"0.8rem", display:"flex", gap:"0.5rem" }}>
+                    <button className="btn btn-secondary" onClick={() => { setSelectedCar(car); window.scrollTo({ top: 0, behavior:"smooth" }); }}>
+                      ✏ Edit
+                    </button>
+                    <button className="btn btn-danger" onClick={() => handleDeleteCar(car._id)}>
+                      🗑 Delete
+                    </button>
+                  </div>
+                }
+              />
+            ))}
+          </div>
+          {!carsLoading && cars.length === 0 && (
+            <p style={{ textAlign:"center", color:"#7a96b4", padding:"2rem" }}>No listings found.</p>
+          )}
+        </div>
+      )}
+
+      {/* ════════════════════════════════════
+          INSPECTIONS TAB
+      ════════════════════════════════════ */}
+      {activeTab === "inspections" && (
+        <div>
+          {/* Stats */}
+          {inspStats && (
+            <div className="adm-stats-grid">
+              {[
+                { label: "Total",     value: inspStats.total,     color: "#0b6ef3" },
+                { label: "Pending",   value: inspStats.pending,   color: "#d97706" },
+                { label: "Approved",  value: inspStats.approved,  color: "#16a34a" },
+                { label: "Completed", value: inspStats.completed, color: "#7c3aed" },
+                { label: "Rejected",  value: inspStats.rejected,  color: "#dc2626" },
+              ].map((s) => (
+                <div key={s.label} className="adm-stat-card card">
+                  <span className="adm-stat-value" style={{ color: s.color }}>{s.value}</span>
+                  <span className="adm-stat-label">{s.label}</span>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Filter */}
+          <div className="adm-filter-row">
+            {["", "pending", "approved", "rejected", "completed"].map((s) => (
+              <button
+                key={s || "all"}
+                type="button"
+                className={`adm-filter-btn ${inspFilter === s ? "adm-filter-btn--active" : ""}`}
+                onClick={() => setInspFilter(s)}
+              >
+                {s ? s.charAt(0).toUpperCase() + s.slice(1) : "All"}
+              </button>
+            ))}
+          </div>
+
+          {inspLoading && <p style={{ color:"#7a96b4" }}>Loading inspections...</p>}
+
+          {/* Inspection list */}
+          <div className="adm-insp-list">
+            {inspections.map((insp) => {
+              const sc = STATUS_COLORS[insp.status] || STATUS_COLORS.pending;
+              const isSelected = selectedInsp?._id === insp._id;
+              return (
+                <div key={insp._id} className="adm-insp-card card">
+                  <div className="adm-insp-top">
+                    {/* Car info */}
+                    <div className="adm-insp-car">
+                      {insp.carImage && (
+                        <img src={insp.carImage} alt={insp.carTitle} className="adm-insp-car-img" />
+                      )}
+                      <div>
+                        <p className="adm-insp-car-title">{insp.carTitle || "Unknown Car"}</p>
+                        <p className="adm-insp-car-sub">{insp.carBrand} {insp.carModel} · {insp.carYear}</p>
+                      </div>
+                    </div>
+
+                    {/* Status badge */}
+                    <span className="adm-insp-status" style={{ background: sc.bg, color: sc.color }}>
+                      {sc.label}
+                    </span>
+                  </div>
+
+                  {/* Buyer info */}
+                  <div className="adm-insp-details">
+                    <div className="adm-insp-detail">
+                      <span className="adm-insp-detail-label">Buyer</span>
+                      <span>{insp.buyerName || "—"} · {insp.buyerEmail}</span>
+                    </div>
+                    <div className="adm-insp-detail">
+                      <span className="adm-insp-detail-label">Preferred</span>
+                      <span>
+                        {insp.preferredDate ? new Date(insp.preferredDate).toLocaleDateString("en-IN") : "Not set"}
+                        {insp.preferredTime ? ` · ${insp.preferredTime}` : ""}
+                      </span>
+                    </div>
+                    <div className="adm-insp-detail">
+                      <span className="adm-insp-detail-label">Location</span>
+                      <span>{insp.location || "—"}</span>
+                    </div>
+                    {insp.notes && (
+                      <div className="adm-insp-detail adm-insp-detail--full">
+                        <span className="adm-insp-detail-label">Notes</span>
+                        <span>{insp.notes}</span>
+                      </div>
+                    )}
+                    <div className="adm-insp-detail">
+                      <span className="adm-insp-detail-label">Requested</span>
+                      <span>{new Date(insp.createdAt).toLocaleDateString("en-IN", { day:"numeric", month:"short", year:"numeric" })}</span>
+                    </div>
+                  </div>
+
+                  {/* Actions */}
+                  <div className="adm-insp-actions">
+                    <button
+                      className="btn btn-secondary"
+                      style={{ fontSize:"0.8rem" }}
+                      onClick={() => setSelectedInsp(isSelected ? null : insp)}
+                    >
+                      {isSelected ? "▲ Close" : "▼ Manage"}
+                    </button>
+                    {insp.status === "pending" && (
+                      <>
+                        <button className="btn btn-primary" style={{ fontSize:"0.8rem" }}
+                          onClick={() => handleUpdateInspection(insp._id, "approved")} disabled={updatingInsp}>
+                          ✓ Approve
+                        </button>
+                        <button className="btn btn-danger" style={{ fontSize:"0.8rem" }}
+                          onClick={() => handleUpdateInspection(insp._id, "rejected")} disabled={updatingInsp}>
+                          ✕ Reject
+                        </button>
+                      </>
+                    )}
+                    {insp.status === "approved" && (
+                      <button className="btn btn-primary" style={{ fontSize:"0.8rem", background:"#7c3aed", border:"none" }}
+                        onClick={() => handleUpdateInspection(insp._id, "completed")} disabled={updatingInsp}>
+                        ✓ Mark Complete
+                      </button>
+                    )}
+                  </div>
+
+                  {/* Expanded manage panel */}
+                  {isSelected && (
+                    <div className="adm-insp-manage">
+                      <div className="field">
+                        <label>Admin Notes</label>
+                        <textarea rows="2" value={adminNotes}
+                          onChange={(e) => setAdminNotes(e.target.value)}
+                          placeholder="Add notes visible to admin only..." />
+                      </div>
+                      <div className="field">
+                        <label>Scheduled Inspection Date</label>
+                        <input type="date" value={inspectionDate}
+                          onChange={(e) => setInspectionDate(e.target.value)} />
+                      </div>
+                      <div style={{ display:"flex", gap:"0.5rem", flexWrap:"wrap" }}>
+                        {["pending","approved","rejected","completed"].map((s) => (
+                          <button key={s} type="button"
+                            className="btn btn-secondary"
+                            style={{ fontSize:"0.78rem", textTransform:"capitalize" }}
+                            onClick={() => handleUpdateInspection(insp._id, s)}
+                            disabled={updatingInsp || insp.status === s}>
+                            Set {s}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+
+          {!inspLoading && inspections.length === 0 && (
+            <div style={{ textAlign:"center", padding:"3rem", color:"#7a96b4" }}>
+              <p style={{ fontSize:"2rem", marginBottom:"0.5rem" }}>🔍</p>
+              <p>No inspection requests found.</p>
+            </div>
+          )}
+        </div>
+      )}
+      {/* ════════════════════════════════════
+          INSPECTOR APPLICATIONS TAB
+      ════════════════════════════════════ */}
+      {activeTab === "applications" && (
+        <div>
+          <div className="adm-filter-row">
+            {["", "pending", "approved", "rejected"].map((s) => (
+              <button key={s || "all"} type="button"
+                className={`adm-filter-btn ${appFilter === s ? "adm-filter-btn--active" : ""}`}
+                onClick={() => setAppFilter(s)}>
+                {s ? s.charAt(0).toUpperCase() + s.slice(1) : "All"}
+              </button>
+            ))}
+          </div>
+
+          {appLoading && <p style={{ color:"#7a96b4" }}>Loading applications...</p>}
+
+          <div className="adm-insp-list">
+            {applications.map((app) => (
+              <div key={app._id} className="adm-insp-card card">
+                <div className="adm-insp-top">
+                  <div>
+                    <p className="adm-insp-car-title">{app.userName}</p>
+                    <p className="adm-insp-car-sub">{app.userEmail}</p>
+                  </div>
+                  <span className="adm-insp-status" style={{
+                    background: app.status === "approved" ? "#dcfce7" : app.status === "rejected" ? "#fee2e2" : "#fef3c7",
+                    color:      app.status === "approved" ? "#065f46" : app.status === "rejected" ? "#991b1b" : "#92400e",
+                  }}>
+                    {app.status}
+                  </span>
+                </div>
+
+                <div className="adm-insp-details">
+                  <div className="adm-insp-detail">
+                    <span className="adm-insp-detail-label">Experience</span>
+                    <span>{app.yearsOfExperience} years</span>
+                  </div>
+                  <div className="adm-insp-detail">
+                    <span className="adm-insp-detail-label">Location</span>
+                    <span>{app.location || "—"}</span>
+                  </div>
+                  <div className="adm-insp-detail">
+                    <span className="adm-insp-detail-label">OBD Tools</span>
+                    <span>{app.obdToolKnowledge ? "✓ Yes" : "✗ No"}</span>
+                  </div>
+                  <div className="adm-insp-detail">
+                    <span className="adm-insp-detail-label">Can Write Reports</span>
+                    <span>{app.canCreateReports ? "✓ Yes" : "✗ No"}</span>
+                  </div>
+                  <div className="adm-insp-detail adm-insp-detail--full">
+                    <span className="adm-insp-detail-label">About</span>
+                    <span>{app.about || "—"}</span>
+                  </div>
+                  <div className="adm-insp-detail adm-insp-detail--full">
+                    <span className="adm-insp-detail-label">Garage Experience</span>
+                    <span>{app.garageExperience || "—"}</span>
+                  </div>
+                  <div className="adm-insp-detail">
+                    <span className="adm-insp-detail-label">Applied</span>
+                    <span>{new Date(app.createdAt).toLocaleDateString("en-IN", { day:"numeric", month:"short", year:"numeric" })}</span>
+                  </div>
+                  {app.documents?.length > 0 && (
+                    <div className="adm-insp-detail">
+                      <span className="adm-insp-detail-label">Documents</span>
+                      <div style={{ display:"flex", gap:"0.4rem", flexWrap:"wrap" }}>
+                        {app.documents.map((d, i) => (
+                          <a key={i} href={d.url} target="_blank" rel="noreferrer"
+                            className="btn btn-secondary" style={{ fontSize:"0.72rem", padding:"0.25rem 0.6rem" }}>
+                            📄 {d.name || `Doc ${i+1}`}
+                          </a>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {app.status === "pending" && (
+                  <div className="adm-insp-actions">
+                    <button className="btn btn-primary" style={{ fontSize:"0.82rem" }}
+                      onClick={async () => {
+                        await reviewApplication(app._id, { status: "approved" });
+                        setApplications((prev) => prev.map((a) => a._id === app._id ? { ...a, status: "approved" } : a));
+                      }}>
+                      ✓ Approve Inspector
+                    </button>
+                    <button className="btn btn-danger" style={{ fontSize:"0.82rem" }}
+                      onClick={async () => {
+                        await reviewApplication(app._id, { status: "rejected" });
+                        setApplications((prev) => prev.map((a) => a._id === app._id ? { ...a, status: "rejected" } : a));
+                      }}>
+                      ✕ Reject
+                    </button>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+
+          {!appLoading && applications.length === 0 && (
+            <div style={{ textAlign:"center", padding:"3rem", color:"#7a96b4" }}>
+              <p style={{ fontSize:"2rem" }}>⭐</p>
+              <p>No inspector applications found.</p>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
   );
 };
 

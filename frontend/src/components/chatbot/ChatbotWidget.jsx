@@ -1,5 +1,4 @@
 import { useEffect, useRef, useState } from "react";
-import api from "../../services/api";
 import "./ChatbotWidget.css";
 
 // System prompt lives on the backend (routes/chatbot.js) — not here.
@@ -50,6 +49,13 @@ const ChatbotWidget = () => {
     }
   }, [isOpen]);
 
+  /* ── Listen for external open trigger (from Services section) ── */
+  useEffect(() => {
+    const handler = () => setIsOpen(true);
+    window.addEventListener("dreamcar:open-chatbot", handler);
+    return () => window.removeEventListener("dreamcar:open-chatbot", handler);
+  }, []);
+
   /* ── Send message to Claude API ── */
   const sendMessage = async (userText) => {
     if (!userText.trim() || loading) return;
@@ -73,10 +79,24 @@ const ChatbotWidget = () => {
 
     try {
       // ── Calls your own backend, which holds the API key securely ──
-      const response = await api.post("/chat/support", {
+      const token = localStorage.getItem("dreamcar_auth_token");
+      const response = await fetch("/api/chat/support", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({
           messages: [...history, { role: "user", content: userText.trim() }],
+        }),
       });
-      const data = response.data;
+
+      if (!response.ok) {
+        const errData = await response.json().catch(() => ({}));
+        throw new Error(errData.message || `Request failed (${response.status})`);
+      }
+
+      const data = await response.json();
       const replyText =
         data.content
           ?.filter((b) => b.type === "text")
@@ -92,7 +112,7 @@ const ChatbotWidget = () => {
       setMessages((prev) => [...prev, botMsg]);
     } catch (err) {
       console.error("Chatbot error:", err);
-      setError(err.response?.data?.message || err.message || "Something went wrong. Please try again.");
+      setError("Something went wrong. Please try again.");
     } finally {
       setLoading(false);
     }
