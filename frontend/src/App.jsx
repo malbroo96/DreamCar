@@ -5,6 +5,7 @@ import ErrorBoundary from "./components/ErrorBoundary";
 import Spinner from "./components/Spinner";
 import ChatbotWidget from "./components/chatbot/ChatbotWidget";
 import CarsAnimation from "./components/CarsAnimation";
+import useDocumentMeta from "./hooks/useDocumentMeta";
 import { getStoredUser, logout } from "./services/authService";
 import { getMessageNotifications } from "./services/messageService";
 import useScrollReveal from "./hooks/useScrollReveal";
@@ -43,6 +44,37 @@ const Logo = () => (
 const BRANDS = ["Maruti Suzuki","Hyundai","Tata","Honda","Toyota","Kia","Mahindra","Ford"];
 const CITIES = ["Chennai","Mumbai","Bangalore","Delhi","Hyderabad","Pune","Kolkata","Ahmedabad"];
 
+const META_BY_PATH = {
+  "/": {
+    title: "Buy and Sell Used Cars in India",
+    description: "Browse verified used car listings, compare details, and connect directly with sellers across India on DreamCar.",
+  },
+  "/login": {
+    title: "Login",
+    description: "Log in to DreamCar to browse listings, sell your car, chat with sellers, and manage your profile.",
+  },
+  "/add-car": {
+    title: "Sell Your Car",
+    description: "List your used car on DreamCar with photos, details, and pricing to reach buyers across India.",
+  },
+  "/messages": {
+    title: "Messages",
+    description: "Chat directly with buyers and sellers in real time on DreamCar.",
+  },
+  "/inspections": {
+    title: "Car Inspections",
+    description: "Review and manage vehicle inspections, condition details, and verification information on DreamCar.",
+  },
+  "/profile": {
+    title: "Profile",
+    description: "Manage your DreamCar account, listings, and personal details in one place.",
+  },
+  "/admin": {
+    title: "Admin Dashboard",
+    description: "Admin tools for managing listings, inspections, and marketplace activity on DreamCar.",
+  },
+};
+
 const BrowseDropdown = ({ onClose, onFilter }) => (
   <div className="nav-dropdown-menu">
     <div className="nav-dropdown-col">
@@ -78,8 +110,17 @@ const App = () => {
 
   const isAuthenticated = Boolean(user);
   const isAdmin = useMemo(() => user?.role === "admin", [user]);
+  const meta = META_BY_PATH[location.pathname] || {
+    title: "Used Car Marketplace",
+    description: "Explore verified pre-owned car listings and dealership information on DreamCar.",
+  };
 
   useScrollReveal(location.pathname);
+  useDocumentMeta({
+    title: meta.title,
+    description: meta.description,
+    path: location.pathname,
+  });
 
   /* Close dropdowns on outside click */
   useEffect(() => {
