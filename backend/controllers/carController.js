@@ -1,4 +1,5 @@
 import Car from "../models/Car.js";
+import User from "../models/User.js";
 import cloudinary from "../config/cloudinary.js";
 
 /* ══════════════════════════════════════════
@@ -22,6 +23,12 @@ const parseNumber = (value) => {
   const parsed = Number(value);
   return Number.isNaN(parsed) ? undefined : parsed;
 };
+
+const normalizeCityName = (value = "") =>
+  String(value)
+    .split(",")[0]
+    .trim()
+    .toLowerCase();
 
 const buildFilters = (query) => {
   const filters = { status: "approved" };
@@ -284,6 +291,32 @@ export const getCars = async (req, res, next) => {
         totalPages: Math.ceil(total / limit),
         hasMore: page * limit < total,
       },
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const getCarStats = async (req, res, next) => {
+  try {
+    const [carsListed, userLocations, verifiedListings, usersPosted] = await Promise.all([
+      Car.countDocuments({}),
+      User.distinct("location", { location: { $exists: true, $ne: "" } }),
+      Car.countDocuments({ "rcDocument.publicId": { $exists: true, $ne: "" } }),
+      User.countDocuments({}),
+    ]);
+
+    const citiesCovered = new Set(
+      userLocations
+        .map(normalizeCityName)
+        .filter(Boolean)
+    ).size;
+
+    res.json({
+      carsListed,
+      usersPosted,
+      citiesCovered,
+      verifiedListings,
     });
   } catch (error) {
     next(error);

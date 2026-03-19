@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { loginWithGoogleCredential } from "../services/authService";
+import { loginWithGoogleCredential, setStoredUser } from "../services/authService";
+import { updateMyProfile } from "../services/userService";
 
 const GOOGLE_SCRIPT_ID = "google-identity-services";
 const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
@@ -29,9 +30,71 @@ const loadGoogleScript = () =>
     document.head.appendChild(script);
   });
 
+const reverseGeocodeLocation = async (latitude, longitude) => {
+  const response = await fetch(
+    `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${latitude}&lon=${longitude}&zoom=10&addressdetails=1`
+  );
+
+  if (!response.ok) {
+    throw new Error("Failed to resolve current location");
+  }
+
+  const data = await response.json();
+  const address = data?.address || {};
+  const city =
+    address.city ||
+    address.town ||
+    address.village ||
+    address.municipality ||
+    address.county ||
+    "";
+  const state = address.state || address.state_district || "";
+
+  return [city, state].filter(Boolean).join(", ").trim();
+};
+
+const requestCurrentLocation = () =>
+  new Promise((resolve, reject) => {
+    if (!navigator.geolocation) {
+      reject(new Error("Geolocation is not supported on this device"));
+      return;
+    }
+
+    navigator.geolocation.getCurrentPosition(
+      async ({ coords }) => {
+        try {
+          const location = await reverseGeocodeLocation(coords.latitude, coords.longitude);
+          resolve(location);
+        } catch (error) {
+          reject(error);
+        }
+      },
+      (error) => reject(error),
+      {
+        enableHighAccuracy: false,
+        timeout: 10000,
+        maximumAge: 300000,
+      }
+    );
+  });
+
+const toStoredUser = (user) => ({
+  id: user.googleId || user.id,
+  name: user.name,
+  username: user.username,
+  googleName: user.googleName,
+  email: user.email,
+  picture: user.picture,
+  role: user.role,
+  bio: user.bio,
+  phone: user.phone,
+  location: user.location,
+});
+
 const LoginPage = ({ onLogin }) => {
   const navigate = useNavigate();
   const [error, setError] = useState("");
+  const [locationMessage, setLocationMessage] = useState("");
   const buttonRef = useRef(null);
 
   useEffect(() => {
@@ -51,7 +114,23 @@ const LoginPage = ({ onLogin }) => {
           callback: async (response) => {
             try {
               setError("");
-              const user = await loginWithGoogleCredential(response.credential);
+              setLocationMessage("");
+              let user = await loginWithGoogleCredential(response.credential);
+
+              if (!user.location?.trim()) {
+                try {
+                  const location = await requestCurrentLocation();
+                  if (location) {
+                    const updatedUser = await updateMyProfile({ location });
+                    user = toStoredUser(updatedUser);
+                    setStoredUser(user);
+                    setLocationMessage(`Location added: ${location}`);
+                  }
+                } catch {
+                  setLocationMessage("Location permission skipped. You can add it later in your profile.");
+                }
+              }
+
               onLogin?.(user);
               navigate(user.role === "admin" ? "/admin" : "/");
             } catch (err) {
@@ -82,6 +161,7 @@ const LoginPage = ({ onLogin }) => {
       <h1>Sign in</h1>
       <p>Use your Google account to access admin features.</p>
       {error ? <p style={{ color: "#c63030" }}>{error}</p> : null}
+      {locationMessage ? <p style={{ color: "#2f855a" }}>{locationMessage}</p> : null}
       <div ref={buttonRef} />
     </section>
   );

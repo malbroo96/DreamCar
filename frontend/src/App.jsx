@@ -20,6 +20,7 @@ const ProfilePage        = lazy(() => import("./pages/ProfilePage"));
 const MessagesPage       = lazy(() => import("./pages/MessagesPage"));
 const InspectionPage     = lazy(() => import("./pages/InspectionPage"));
 const DealerProfilePage  = lazy(() => import("./pages/DealerProfilePage"));
+const FooterInfoPage     = lazy(() => import("./pages/FooterInfoPage"));
 
 const PageLoader = () => <Spinner size="lg" text="Loading..." />;
 
@@ -72,6 +73,10 @@ const META_BY_PATH = {
   "/admin": {
     title: "Admin Dashboard",
     description: "Admin tools for managing listings, inspections, and marketplace activity on DreamCar.",
+  },
+  "/info": {
+    title: "Information",
+    description: "Read DreamCar policies, guides, support information, and footer content pages.",
   },
 };
 
@@ -202,6 +207,14 @@ const App = () => {
                 {/* Nav links */}
                 <nav className={`nav-links ${mobileNavOpen ? "nav-links--open" : ""}`}>
 
+                  {isAuthenticated && (
+                    <NavLink to="/add-car"
+                      className={({ isActive }) => `nav-link nav-sell-link${isActive ? " active" : ""}`}
+                      onClick={() => setMobileNavOpen(false)}>
+                      + Sell Car
+                    </NavLink>
+                  )}
+
                   {/* Browse Cars + dropdown */}
                   {isAuthenticated && (
                     <div className="nav-dropdown-wrap" ref={browseRef}>
@@ -238,14 +251,6 @@ const App = () => {
                   )}
 
                   {isAuthenticated && (
-                    <NavLink to="/add-car"
-                      className={({ isActive }) => `nav-link nav-sell-link${isActive ? " active" : ""}`}
-                      onClick={() => setMobileNavOpen(false)}>
-                      + Sell Car
-                    </NavLink>
-                  )}
-
-                  {isAdmin && (
                     <NavLink to="/admin"
                       className={({ isActive }) => `nav-link${isActive ? " active" : ""}`}
                       onClick={() => setMobileNavOpen(false)}>
@@ -312,6 +317,7 @@ const App = () => {
                   <Route path="/messages"    element={isAuthenticated ? <MessagesPage /> : <Navigate to="/login" replace />} />
                   <Route path="/inspections" element={isAuthenticated ? <InspectionPage /> : <Navigate to="/login" replace />} />
                   <Route path="/profile"     element={isAuthenticated ? <ProfilePage onProfileUpdated={setUser} /> : <Navigate to="/login" replace />} />
+                  <Route path="/info/:slug"  element={isAuthenticated ? <FooterInfoPage /> : <Navigate to="/login" replace />} />
                   <Route path="/login"       element={!isAuthenticated ? <LoginPage onLogin={setUser} /> : <Navigate to={isAdmin ? "/admin" : "/"} replace />} />
                   <Route path="/admin"       element={isAdmin ? <AdminDashboardPage /> : <Navigate to="/login" replace />} />
                   <Route path="*"            element={<div style={{ textAlign:"center", padding:"3rem", color:"#7a96b4" }}><h2>Page not found</h2><p>The page you're looking for doesn't exist.</p></div>} />

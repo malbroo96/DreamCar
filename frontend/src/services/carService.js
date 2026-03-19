@@ -14,6 +14,11 @@ export const getCarspaginated = async (params) => {
   return response.data;
 };
 
+export const getCarStats = async () => {
+  const response = await api.get("/cars/stats/summary");
+  return response.data;
+};
+
 export const getCarById = async (id) => {
   const response = await api.get(`/cars/${id}`);
   return response.data;

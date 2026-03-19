@@ -1,7 +1,7 @@
 import { memo, useState } from "react";
 import "./CarFilters.css";
 
-const POPULAR_CITIES = ["Chennai", "Mumbai", "Delhi", "Bangalore", "Hyderabad", "Pune", "Kolkata", "Ahmedabad"];
+const POPULAR_CITIES = ["Malappuram", "Manjeri", "Tirur", "Perinthalmanna", "Kondotty", "Nilambur", "Ponnani", "Kottakkal"];
 
 const BRANDS = ["", "Maruti Suzuki", "Hyundai", "Tata", "Mahindra", "Honda", "Toyota", "Kia", "Ford", "Volkswagen", "BMW", "Mercedes-Benz", "Audi", "Skoda", "Renault", "Nissan", "MG", "Jeep"];
 

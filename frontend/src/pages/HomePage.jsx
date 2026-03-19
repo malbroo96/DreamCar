@@ -6,6 +6,7 @@ import Spinner from "../components/Spinner";
 import useCars from "../hooks/useCars";
 import useDebounce from "../hooks/useDebounce";
 import { getStoredUser } from "../services/authService";
+import { getCarStats } from "../services/carService";
 import { startConversation } from "../services/messageService";
 import "./HomePage.css";
 
@@ -15,17 +16,49 @@ const defaultFilters = {
   transmission: "", city: "", area: "", featured: "", search: "",
 };
 
-const STATS = [
-  { value: "10,000+", label: "Cars Listed" },
-  { value: "500+",    label: "Verified Dealers" },
-  { value: "50+",     label: "Cities Covered" },
-  { value: "RC",      label: "Verified Listings" },
-];
+const FOOTER_LINK_GROUPS = {
+  company: [
+    { label: "Buyer Protection Policy", slug: "buyer-protection-policy" },
+    { label: "Seller Verification Policy", slug: "seller-verification-policy" },
+    { label: "RC & Ownership Check Policy", slug: "rc-ownership-check-policy" },
+    { label: "Safe Payments Policy", slug: "safe-payments-policy" },
+    { label: "Privacy & Data Protection", slug: "privacy-data-protection" },
+    { label: "Fair Listing Terms", slug: "fair-listing-terms" },
+  ],
+  discover: [
+    { label: "Buy a Used Car", slug: "buy-a-used-car" },
+    { label: "Sell Your Car", slug: "sell-your-car" },
+    { label: "Car EMI Calculator", slug: "car-emi-calculator" },
+    { label: "RC Transfer Guide", slug: "rc-transfer-guide" },
+    { label: "Car Insurance Tips", slug: "car-insurance-tips" },
+    { label: "Check Vehicle Details", slug: "check-vehicle-details" },
+  ],
+  support: [
+    { label: "FAQs", slug: "faqs" },
+    { label: "Contact Us", slug: "contact-us" },
+    { label: "Report an Issue", slug: "report-an-issue" },
+    { label: "Safety Tips", slug: "safety-tips" },
+    { label: "Dealer Guidelines", slug: "dealer-guidelines" },
+    { label: "Feedback", slug: "feedback" },
+  ],
+};
+
+const getPrimaryLocation = (value = "") =>
+  String(value)
+    .split(",")[0]
+    .trim()
+    .toLowerCase();
 
 const HomePage = () => {
   const navigate = useNavigate();
   const [filters, setFilters] = useState(defaultFilters);
   const [heroSearch, setHeroSearch] = useState("");
+  const [stats, setStats] = useState({
+    carsListed: 0,
+    usersPosted: 0,
+    citiesCovered: 0,
+    verifiedListings: 0,
+  });
   const user = useMemo(() => getStoredUser(), []);
 
   const displayName = useMemo(() => {
@@ -54,6 +87,26 @@ const HomePage = () => {
     observer.observe(sentinelRef.current);
     return () => observer.disconnect();
   }, [hasMore, loadingMore, loadMore]);
+
+  useEffect(() => {
+    let active = true;
+
+    const loadStats = async () => {
+      try {
+        const data = await getCarStats();
+        if (active) setStats(data);
+      } catch {
+        // Keep the default zero values if stats fail to load.
+      }
+    };
+
+    loadStats();
+
+    return () => {
+      active = false;
+    };
+  }, []);
+
   const [chatError, setChatError] = useState("");
   const [emiOpen, setEmiOpen]     = useState(false);
   const [emiPrice, setEmiPrice]   = useState(500000);
@@ -61,8 +114,47 @@ const HomePage = () => {
   const [emiRate, setEmiRate]     = useState(8.5);
   const [emiMonths, setEmiMonths] = useState(60);
 
-  const featuredCars = useMemo(() => cars.filter((c) => c.featured), [cars]);
-  const regularCars  = useMemo(() => cars.filter((c) => !c.featured), [cars]);
+  const userCity = useMemo(() => getPrimaryLocation(user?.location), [user]);
+  const sortCarsByNearby = (list) => {
+    if (!userCity || filters.city) return list;
+
+    return [...list].sort((a, b) => {
+      const aNearby = getPrimaryLocation(a.city || a.location) === userCity ? 1 : 0;
+      const bNearby = getPrimaryLocation(b.city || b.location) === userCity ? 1 : 0;
+      return bNearby - aNearby;
+    });
+  };
+
+  const featuredCars = useMemo(
+    () => sortCarsByNearby(cars.filter((c) => c.featured)),
+    [cars, userCity, filters.city]
+  );
+  const regularCars  = useMemo(
+    () => sortCarsByNearby(cars.filter((c) => !c.featured)),
+    [cars, userCity, filters.city]
+  );
+  const heroStats = useMemo(() => ([
+    { value: stats.carsListed.toLocaleString("en-IN"), label: "Cars Listed" },
+    { value: stats.usersPosted.toLocaleString("en-IN"), label: "Users Posted" },
+    { value: stats.citiesCovered.toLocaleString("en-IN"), label: "Cities Covered" },
+    { value: stats.verifiedListings.toLocaleString("en-IN"), label: "Verified Listings" },
+  ]), [stats]);
+
+  const scrollToListings = () => {
+    document.getElementById("car-listings")?.scrollIntoView({ behavior: "smooth" });
+  };
+
+  const browseBrandCars = (brand) => {
+    setHeroSearch("");
+    setFilters({ ...defaultFilters, brand });
+    scrollToListings();
+  };
+
+  const browseAllCars = () => {
+    setHeroSearch("");
+    setFilters(defaultFilters);
+    scrollToListings();
+  };
 
   const handleFilterChange = (event) => {
     const { name, value } = event.target;
@@ -88,6 +180,10 @@ const HomePage = () => {
     } catch (err) {
       setChatError(err.response?.data?.message || "Failed to start chat");
     }
+  };
+
+  const openFooterPage = (slug) => {
+    navigate(`/info/${slug}`);
   };
 
   return (
@@ -129,10 +225,7 @@ const HomePage = () => {
                 key={brand}
                 type="button"
                 className="hero-quick-chip"
-                onClick={() => {
-                  setFilters((prev) => ({ ...prev, brand }));
-                  document.getElementById("car-listings")?.scrollIntoView({ behavior: "smooth" });
-                }}
+                onClick={() => browseBrandCars(brand)}
               >
                 {brand}
               </button>
@@ -142,7 +235,7 @@ const HomePage = () => {
 
         {/* Stats bar */}
         <div className="hero-stats">
-          {STATS.map((s) => (
+          {heroStats.map((s) => (
             <div key={s.label} className="hero-stat">
               <span className="hero-stat-value">{s.value}</span>
               <span className="hero-stat-label">{s.label}</span>
@@ -284,7 +377,7 @@ const HomePage = () => {
               desc: "Browse thousands of RC-verified pre-owned cars across India with full inspection reports.",
               color: "#0b6ef3",
               cta: "Browse Cars",
-              action: () => document.getElementById("car-listings")?.scrollIntoView({ behavior: "smooth" }),
+              action: browseAllCars,
             },
             {
               icon: "💰",
@@ -436,20 +529,26 @@ const HomePage = () => {
           <div className="footer-links-grid">
             <div className="footer-col">
               <h4 className="footer-col-title">Company</h4>
-              {["About Us","Careers","Press Kit","Blog","Privacy Policy","Terms of Service"].map((l) => (
-                <a key={l} href="#" className="footer-link">{l}</a>
+              {FOOTER_LINK_GROUPS.company.map((item) => (
+                <button key={item.slug} type="button" className="footer-link footer-link-btn" onClick={() => openFooterPage(item.slug)}>
+                  {item.label}
+                </button>
               ))}
             </div>
             <div className="footer-col">
               <h4 className="footer-col-title">Discover</h4>
-              {["Buy a Used Car","Sell Your Car","Car EMI Calculator","RC Transfer Guide","Car Insurance Tips","Check Vehicle Details"].map((l) => (
-                <a key={l} href="#" className="footer-link">{l}</a>
+              {FOOTER_LINK_GROUPS.discover.map((item) => (
+                <button key={item.slug} type="button" className="footer-link footer-link-btn" onClick={() => openFooterPage(item.slug)}>
+                  {item.label}
+                </button>
               ))}
             </div>
             <div className="footer-col">
               <h4 className="footer-col-title">Help & Support</h4>
-              {["FAQs","Contact Us","Report an Issue","Safety Tips","Dealer Guidelines","Feedback"].map((l) => (
-                <a key={l} href="#" className="footer-link">{l}</a>
+              {FOOTER_LINK_GROUPS.support.map((item) => (
+                <button key={item.slug} type="button" className="footer-link footer-link-btn" onClick={() => openFooterPage(item.slug)}>
+                  {item.label}
+                </button>
               ))}
             </div>
           </div>

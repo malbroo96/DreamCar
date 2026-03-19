@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import "./ChatbotWidget.css";
 
 // System prompt lives on the backend (routes/chatbot.js) — not here.
@@ -21,6 +22,7 @@ const SUGGESTIONS = [
    ChatbotWidget
 ════════════════════════════════════════ */
 const ChatbotWidget = () => {
+  const navigate = useNavigate();
   const [isOpen, setIsOpen] = useState(false);
   const [messages, setMessages] = useState([
     {
@@ -28,6 +30,7 @@ const ChatbotWidget = () => {
       role: "assistant",
       content:
         "Hi! I'm DreamBot 🚗 Your DreamCar assistant. I can help you buy or sell cars, contact dealers, manage your account, and more. How can I help you today?",
+      listings: [],
       time: new Date(),
     },
   ]);
@@ -107,6 +110,7 @@ const ChatbotWidget = () => {
         id: `b-${Date.now()}`,
         role: "assistant",
         content: replyText,
+        listings: data.content?.find((b) => b.type === "listings")?.items || [],
         time: new Date(),
       };
       setMessages((prev) => [...prev, botMsg]);
@@ -141,6 +145,7 @@ const ChatbotWidget = () => {
         role: "assistant",
         content:
           "Hi! I'm DreamBot 🚗 Your DreamCar assistant. I can help you buy or sell cars, contact dealers, manage your account, and more. How can I help you today?",
+        listings: [],
         time: new Date(),
       },
     ]);
@@ -207,6 +212,36 @@ const ChatbotWidget = () => {
                 )}
                 <div className="chatbot-msg-body">
                   <div className="chatbot-bubble">{msg.content}</div>
+                  {msg.role === "assistant" && msg.listings?.length > 0 && (
+                    <div className="chatbot-listings">
+                      {msg.listings.map((car) => (
+                        <button
+                          key={car.id}
+                          type="button"
+                          className="chatbot-listing-card"
+                          onClick={() => navigate(`/cars/${car.id}`)}
+                        >
+                          {car.image ? (
+                            <img src={car.image} alt={car.title} className="chatbot-listing-image" />
+                          ) : (
+                            <div className="chatbot-listing-image chatbot-listing-image--placeholder">Car</div>
+                          )}
+                          <div className="chatbot-listing-content">
+                            <div className="chatbot-listing-title">{car.title}</div>
+                            <div className="chatbot-listing-meta">
+                              {car.city || car.location || "Location not available"}
+                            </div>
+                            <div className="chatbot-listing-meta">
+                              {car.fuelType} • {car.transmission}
+                            </div>
+                            <div className="chatbot-listing-price">
+                              Rs {Number(car.price || 0).toLocaleString("en-IN")}
+                            </div>
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  )}
                   <div className="chatbot-msg-time">{formatTime(msg.time)}</div>
                 </div>
               </div>

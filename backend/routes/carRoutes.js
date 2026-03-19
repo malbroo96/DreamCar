@@ -5,6 +5,7 @@ import {
   extractCarFromRC,
   getCarById,
   getCars,
+  getCarStats,
   updateCar,
   getRCDocumentUrl,
   verifyRCDocument,
@@ -16,6 +17,7 @@ const router = express.Router();
 
 router.use(protect);
 router.post("/rc-extract", uploadRC.single("rcDocument"), extractCarFromRC);
+router.get("/stats/summary", getCarStats);
 
 router.route("/")
   .get(getCars)
