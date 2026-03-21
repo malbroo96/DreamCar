@@ -14,6 +14,7 @@ import messageRoutes from "./routes/messageRoutes.js";
 import aiRoutes from "./routes/aiRoutes.js";
 import chatbotRouter from "./routes/chatbot.js";
 import inspectionRoutes from "./routes/inspectionRoutes.js";
+import paymentRoutes from "./routes/paymentRoutes.js";
 import { registerMessageSocketHandlers } from "./socket/messageSocket.js";
 import { errorHandler, notFound } from "./middleware/errorHandler.js";
 
@@ -23,6 +24,7 @@ const PORT   = process.env.PORT || 5000;
 
 const allowedOrigins = (process.env.ALLOWED_ORIGINS || process.env.FRONTEND_URL || "")
   .split(",").map((o) => o.trim()).filter(Boolean);
+const isProduction = process.env.NODE_ENV === "production";
 
 const io = new SocketIOServer(server, {
   cors: { origin: allowedOrigins.length ? allowedOrigins : true, credentials: true },
@@ -30,14 +32,20 @@ const io = new SocketIOServer(server, {
 registerMessageSocketHandlers(io);
 
 app.use(cors({ origin: allowedOrigins.length ? allowedOrigins : true, credentials: true }));
-app.use(express.json());
+app.use(express.json({
+  verify: (req, _res, buf) => {
+    if (req.originalUrl === "/api/payments/webhook") {
+      req.rawBody = buf.toString("utf8");
+    }
+  },
+}));
 app.use(express.urlencoded({ extended: true }));
 app.use(morgan("dev"));
 
 /* ── Rate limiters ── */
 const generalLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 200,
+  max: isProduction ? 500 : 5000,
   standardHeaders: true,
   legacyHeaders: false,
   message: { message: "Too many requests, please try again later." },
@@ -45,7 +53,10 @@ const generalLimiter = rateLimit({
 
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 20, // stricter for auth
+  max: isProduction ? 20 : 100,
+  standardHeaders: true,
+  legacyHeaders: false,
+  skipSuccessfulRequests: true,
   message: { message: "Too many auth attempts, please try again later." },
 });
 
@@ -62,11 +73,11 @@ const uploadLimiter = rateLimit({
 });
 
 app.use("/api", generalLimiter);
-app.use("/api/auth", authLimiter);
 app.use("/api/chat", chatLimiter);
 
 app.get("/api/health", (_, res) => res.json({ ok: true, service: "dreamcar-backend" }));
 
+app.use("/api/auth/google", authLimiter);
 app.use("/api/cars",        carRoutes);
 app.use("/api/admin",       adminRoutes);
 app.use("/api/auth",        authRoutes);
@@ -75,6 +86,7 @@ app.use("/api/messages",    messageRoutes);
 app.use("/api/ai",          aiRoutes);
 app.use("/api/chat",        chatbotRouter);
 app.use("/api/inspections", inspectionRoutes);
+app.use("/api/payments",    paymentRoutes);
 
 app.use(notFound);
 app.use(errorHandler);

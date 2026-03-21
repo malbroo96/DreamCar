@@ -1,9 +1,10 @@
 import { useEffect, useState } from "react";
-import { Link, useNavigate, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { getCarById, getCars } from "../services/carService";
 import { getStoredUser } from "../services/authService";
 import { startConversation } from "../services/messageService";
-import { requestInspection } from "../services/inspectionService";
+import { createInspectionOrder, verifyInspectionPayment } from "../services/paymentService";
+import loadRazorpayCheckout from "../utils/loadRazorpayCheckout";
 import CarCard from "../components/CarCard";
 import "./CarDetailPage.css";
 
@@ -42,6 +43,7 @@ const overallHealth = (hc) => {
 const CarDetailPage = () => {
   const navigate = useNavigate();
   const { id } = useParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const user = getStoredUser();
 
   const [car, setCar]                   = useState(null);
@@ -58,6 +60,7 @@ const CarDetailPage = () => {
   const [inspectionLoading, setInspectionLoading] = useState(false);
   const [inspectionSuccess, setInspectionSuccess] = useState(false);
   const [inspectionError, setInspectionError]     = useState("");
+  const [inspectionAmount, setInspectionAmount]   = useState(null);
 
   /* EMI state */
   const [emiDownPct, setEmiDownPct]     = useState(20);
@@ -83,6 +86,18 @@ const CarDetailPage = () => {
     };
     fetchCar();
   }, [id]);
+
+  useEffect(() => {
+    if (!car) return;
+    if (searchParams.get("requestInspection") !== "1") return;
+
+    setInspectionOpen(true);
+    setSearchParams((params) => {
+      const next = new URLSearchParams(params);
+      next.delete("requestInspection");
+      return next;
+    }, { replace: true });
+  }, [car, searchParams, setSearchParams]);
 
   /* Keyboard nav for lightbox */
   useEffect(() => {
@@ -117,14 +132,57 @@ const CarDetailPage = () => {
     try {
       setInspectionLoading(true);
       setInspectionError("");
-      await requestInspection(car._id, {
+      const Razorpay = await loadRazorpayCheckout();
+      const orderPayload = await createInspectionOrder({
+        carId: car._id,
         ...inspectionForm,
         location: inspectionForm.location || car.location,
       });
+      setInspectionAmount(orderPayload.order.amount);
+
+      await new Promise((resolve, reject) => {
+        const checkout = new Razorpay({
+          key: orderPayload.razorpayKeyId,
+          amount: orderPayload.order.amount,
+          currency: orderPayload.order.currency,
+          name: "DreamCar",
+          description: `Inspection booking for ${car.title}`,
+          order_id: orderPayload.order.id,
+          prefill: {
+            name: user?.name || "",
+            email: user?.email || "",
+            contact: user?.phone || "",
+          },
+          notes: {
+            bookingId: orderPayload.booking._id,
+            carId: car._id,
+          },
+          theme: { color: "#0b6ef3" },
+          modal: {
+            ondismiss: () => reject(new Error("Payment checkout was closed before completion")),
+          },
+          handler: async (response) => {
+            try {
+              await verifyInspectionPayment(response);
+              resolve(response);
+            } catch (error) {
+              reject(error);
+            }
+          },
+        });
+
+        checkout.on("payment.failed", (response) => {
+          reject(new Error(response?.error?.description || "Payment failed"));
+        });
+
+        checkout.open();
+      });
+
       setInspectionSuccess(true);
       setInspectionOpen(false);
+      setInspectionForm({ preferredDate: "", preferredTime: "Morning", location: "", notes: "" });
     } catch (err) {
-      setInspectionError(err.response?.data?.message || "Failed to submit request");
+      setInspectionError(err.response?.data?.message || err.message || "Failed to start payment");
     } finally {
       setInspectionLoading(false);
     }
@@ -574,7 +632,14 @@ const CarDetailPage = () => {
 
               <div className="cdp-insp-info">
                 <span>ℹ</span>
-                <span>Our team will review your request and contact you within 24 hours to confirm the inspection schedule.</span>
+                <span>Payment is mandatory before booking confirmation. DreamCar validates the signature on the backend and treats the webhook as the source of truth.</span>
+              </div>
+
+              <div className="cdp-insp-info">
+                <span>â‚¹</span>
+                <span>
+                  Inspection fee: {inspectionAmount ? `â‚¹${Number(inspectionAmount / 100).toLocaleString("en-IN")}` : "Calculated securely on the backend at checkout"}
+                </span>
               </div>
 
               <div style={{ display:"flex", gap:"0.75rem", marginTop:"1rem" }}>
@@ -582,7 +647,7 @@ const CarDetailPage = () => {
                   Cancel
                 </button>
                 <button type="submit" className="btn btn-primary" style={{ flex:1 }} disabled={inspectionLoading}>
-                  {inspectionLoading ? "Submitting..." : "Submit Request"}
+                  {inspectionLoading ? "Opening Payment..." : "Pay & Confirm Booking"}
                 </button>
               </div>
             </form>

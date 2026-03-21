@@ -70,7 +70,7 @@ const CarCard = ({ car, adminActions, currentUserId }) => {
             className="carcard-insp-btn"
             onClick={(e) => {
               e.preventDefault();
-              navigate(`/inspections?car=${car._id}&title=${encodeURIComponent(car.title)}`);
+              navigate(`/cars/${car._id}?requestInspection=1`);
             }}
           >
             🔍 Request Inspection

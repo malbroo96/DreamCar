@@ -4,6 +4,7 @@ import InspectorProfile from "../models/InspectorProfile.js";
 import Car from "../models/Car.js";
 import User from "../models/User.js";
 import cloudinary from "../config/cloudinary.js";
+import { createInspectionOrder } from "../services/paymentService.js";
 
 const QUALITY_BANDS = {
   high: { min: 75, max: 100 },
@@ -153,50 +154,35 @@ const saveApplication = async (application, step, eventLabel, user) => {
 
 export const requestInspection = async (req, res, next) => {
   try {
-    const car = await Car.findById(req.params.carId);
-    if (!car) { res.status(404); throw new Error("Car not found"); }
-    if (car.ownerId === req.user.id) {
-      res.status(400);
-      throw new Error("You cannot request an inspection on your own listing.");
-    }
-
-    const existing = await Inspection.findOne({
-      carId: car._id,
-      buyerId: req.user.id,
-      status: { $in: ["requested", "accepted"] },
+    const { inspection, payment, order } = await createInspectionOrder({
+      buyer: req.user,
+      carId: req.params.carId,
+      preferredDate: req.body.preferredDate,
+      preferredTime: req.body.preferredTime,
+      location: req.body.location,
+      notes: req.body.notes,
+      requestedAmount: req.body.amount,
     });
-    if (existing) {
-      res.status(409);
-      throw new Error("You already have an active inspection request for this car.");
-    }
-
-    const inspection = await Inspection.create({
-      carId: car._id,
-      carTitle: car.title,
-      carBrand: car.brand,
-      carModel: car.model,
-      carYear: car.year,
-      carImage: car.images?.[0]?.url || "",
-      buyerId: req.user.id,
-      buyerName: req.user.name || "",
-      buyerEmail: req.user.email || "",
-      sellerId: car.ownerId || "",
-      sellerName: car.ownerName || "",
-      preferredDate: req.body.preferredDate || null,
-      preferredTime: req.body.preferredTime || "",
-      location: req.body.location || car.location || "",
-      notes: req.body.notes || "",
+    res.status(201).json({
+      booking: inspection,
+      payment,
+      order: {
+        id: order.id,
+        amount: order.amount,
+        currency: order.currency,
+        receipt: order.receipt,
+      },
+      razorpayKeyId: process.env.RAZORPAY_KEY_ID,
     });
-
-    res.status(201).json(inspection);
   } catch (error) {
+    if (error.statusCode) res.status(error.statusCode);
     next(error);
   }
 };
 
 export const getMyInspections = async (req, res, next) => {
   try {
-    const inspections = await Inspection.find({ buyerId: req.user.id }).sort({ createdAt: -1 });
+    const inspections = await Inspection.find({ buyerId: req.user.id }).populate("paymentId").sort({ createdAt: -1 });
     res.json(inspections);
   } catch (error) {
     next(error);
@@ -207,7 +193,7 @@ export const cancelInspection = async (req, res, next) => {
   try {
     const inspection = await Inspection.findOne({ _id: req.params.id, buyerId: req.user.id });
     if (!inspection) { res.status(404); throw new Error("Inspection request not found"); }
-    if (!["requested", "accepted"].includes(inspection.status)) {
+    if (!["payment_created", "payment_pending", "confirmed", "accepted"].includes(inspection.status)) {
       res.status(400);
       throw new Error("Only active requests can be cancelled.");
     }
@@ -221,7 +207,7 @@ export const cancelInspection = async (req, res, next) => {
 
 export const getAvailableInspections = async (req, res, next) => {
   try {
-    const inspections = await Inspection.find({ status: "requested" }).sort({ createdAt: -1 });
+    const inspections = await Inspection.find({ status: "confirmed", paymentStatus: "paid" }).sort({ createdAt: -1 });
     res.json(inspections);
   } catch (error) {
     next(error);
@@ -237,7 +223,11 @@ export const acceptInspection = async (req, res, next) => {
 
     const inspection = await Inspection.findById(req.params.id);
     if (!inspection) { res.status(404); throw new Error("Inspection not found"); }
-    if (inspection.status !== "requested") {
+    if (inspection.paymentStatus !== "paid") {
+      res.status(400);
+      throw new Error("Payment must be completed before assignment.");
+    }
+    if (!["confirmed", "accepted"].includes(inspection.status)) {
       res.status(400);
       throw new Error("This inspection is no longer available.");
     }
@@ -257,7 +247,7 @@ export const getMyJobs = async (req, res, next) => {
   try {
     const inspections = await Inspection.find({
       inspectorId: req.user.id,
-      status: { $in: ["accepted", "completed"] },
+      status: { $in: ["accepted", "completed", "confirmed"] },
     }).sort({ createdAt: -1 });
     res.json(inspections);
   } catch (error) {
@@ -448,15 +438,17 @@ export const getAllInspections = async (req, res, next) => {
 
 export const getInspectionStats = async (req, res, next) => {
   try {
-    const [total, requested, accepted, completed, rejected, applications] = await Promise.all([
+    const [total, created, pending, confirmed, accepted, completed, failed, applications] = await Promise.all([
       Inspection.countDocuments(),
-      Inspection.countDocuments({ status: "requested" }),
+      Inspection.countDocuments({ status: "payment_created" }),
+      Inspection.countDocuments({ status: "payment_pending" }),
+      Inspection.countDocuments({ status: "confirmed" }),
       Inspection.countDocuments({ status: "accepted" }),
       Inspection.countDocuments({ status: "completed" }),
-      Inspection.countDocuments({ status: "rejected" }),
+      Inspection.countDocuments({ status: "payment_failed" }),
       InspectorApplication.countDocuments({ "status.current": { $in: ["submitted", "under_review"] } }),
     ]);
-    res.json({ total, requested, accepted, completed, rejected, pendingApplications: applications });
+    res.json({ total, created, pending, confirmed, accepted, completed, failed, pendingApplications: applications });
   } catch (error) {
     next(error);
   }

@@ -95,7 +95,9 @@ const LoginPage = ({ onLogin }) => {
   const navigate = useNavigate();
   const [error, setError] = useState("");
   const [locationMessage, setLocationMessage] = useState("");
+  const [authenticating, setAuthenticating] = useState(false);
   const buttonRef = useRef(null);
+  const authInFlightRef = useRef(false);
 
   useEffect(() => {
     let mounted = true;
@@ -112,7 +114,10 @@ const LoginPage = ({ onLogin }) => {
         window.google.accounts.id.initialize({
           client_id: clientId,
           callback: async (response) => {
+            if (authInFlightRef.current) return;
             try {
+              authInFlightRef.current = true;
+              if (mounted) setAuthenticating(true);
               setError("");
               setLocationMessage("");
               let user = await loginWithGoogleCredential(response.credential);
@@ -135,6 +140,9 @@ const LoginPage = ({ onLogin }) => {
               navigate(user.role === "admin" ? "/admin" : "/");
             } catch (err) {
               setError(err.response?.data?.message || "Google login failed");
+            } finally {
+              authInFlightRef.current = false;
+              if (mounted) setAuthenticating(false);
             }
           },
         });
@@ -162,7 +170,10 @@ const LoginPage = ({ onLogin }) => {
       <p>Use your Google account to access admin features.</p>
       {error ? <p style={{ color: "#c63030" }}>{error}</p> : null}
       {locationMessage ? <p style={{ color: "#2f855a" }}>{locationMessage}</p> : null}
-      <div ref={buttonRef} />
+      <div style={{ opacity: authenticating ? 0.6 : 1, pointerEvents: authenticating ? "none" : "auto" }}>
+        <div ref={buttonRef} />
+      </div>
+      {authenticating ? <p>Signing you in...</p> : null}
     </section>
   );
 };
