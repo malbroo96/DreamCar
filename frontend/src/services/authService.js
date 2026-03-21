@@ -27,6 +27,13 @@ export const loginWithGoogleCredential = async (credential) => {
   return user;
 };
 
+export const refreshCurrentUser = async () => {
+  const response = await api.get("/auth/me");
+  const user = response.data?.user || null;
+  if (user) setStoredUser(user);
+  return user;
+};
+
 export const logout = () => {
   setStoredToken(null);
   setStoredUser(null);

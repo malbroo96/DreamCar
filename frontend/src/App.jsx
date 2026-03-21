@@ -6,7 +6,7 @@ import Spinner from "./components/Spinner";
 import ChatbotWidget from "./components/chatbot/ChatbotWidget";
 import CarsAnimation from "./components/CarsAnimation";
 import useDocumentMeta from "./hooks/useDocumentMeta";
-import { getStoredUser, logout } from "./services/authService";
+import { getStoredUser, logout, refreshCurrentUser, setStoredUser } from "./services/authService";
 import { getMessageNotifications } from "./services/messageService";
 import useScrollReveal from "./hooks/useScrollReveal";
 import "./App.css";
@@ -105,6 +105,7 @@ const BrowseDropdown = ({ onClose, onFilter }) => (
 const App = () => {
   const location = useLocation();
   const [user, setUser]               = useState(() => getStoredUser());
+  const [authResolved, setAuthResolved] = useState(() => !getStoredUser());
   const [unreadCount, setUnreadCount] = useState(0);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [browseOpen, setBrowseOpen]   = useState(false);
@@ -126,6 +127,31 @@ const App = () => {
     description: meta.description,
     path: location.pathname,
   });
+
+  useEffect(() => {
+    if (!user) {
+      setAuthResolved(true);
+      return;
+    }
+
+    let mounted = true;
+    refreshCurrentUser()
+      .then((freshUser) => {
+        if (!mounted) return;
+        setUser(freshUser);
+      })
+      .catch(() => {
+        if (!mounted) return;
+        logout();
+        setStoredUser(null);
+        setUser(null);
+      })
+      .finally(() => {
+        if (mounted) setAuthResolved(true);
+      });
+
+    return () => { mounted = false; };
+  }, []);
 
   /* Close dropdowns on outside click */
   useEffect(() => {
@@ -250,7 +276,7 @@ const App = () => {
                     </NavLink>
                   )}
 
-                  {isAuthenticated && (
+                  {isAuthenticated && isAdmin && (
                     <NavLink to="/admin"
                       className={({ isActive }) => `nav-link${isActive ? " active" : ""}`}
                       onClick={() => setMobileNavOpen(false)}>
@@ -309,19 +335,23 @@ const App = () => {
 
             <main className="container content-area">
               <Suspense fallback={<PageLoader />}>
-                <Routes>
-                  <Route path="/"            element={isAuthenticated ? <HomePage /> : <Navigate to="/login" replace />} />
-                  <Route path="/cars/:id"    element={isAuthenticated ? <CarDetailPage /> : <Navigate to="/login" replace />} />
-                  <Route path="/dealer/:id"  element={isAuthenticated ? <DealerProfilePage /> : <Navigate to="/login" replace />} />
-                  <Route path="/add-car"     element={isAuthenticated ? <AddCarPage /> : <Navigate to="/login" replace />} />
-                  <Route path="/messages"    element={isAuthenticated ? <MessagesPage /> : <Navigate to="/login" replace />} />
-                  <Route path="/inspections" element={isAuthenticated ? <InspectionPage /> : <Navigate to="/login" replace />} />
-                  <Route path="/profile"     element={isAuthenticated ? <ProfilePage onProfileUpdated={setUser} /> : <Navigate to="/login" replace />} />
-                  <Route path="/info/:slug"  element={isAuthenticated ? <FooterInfoPage /> : <Navigate to="/login" replace />} />
-                  <Route path="/login"       element={!isAuthenticated ? <LoginPage onLogin={setUser} /> : <Navigate to={isAdmin ? "/admin" : "/"} replace />} />
-                  <Route path="/admin"       element={isAdmin ? <AdminDashboardPage /> : <Navigate to="/login" replace />} />
-                  <Route path="*"            element={<div style={{ textAlign:"center", padding:"3rem", color:"#7a96b4" }}><h2>Page not found</h2><p>The page you're looking for doesn't exist.</p></div>} />
-                </Routes>
+                {authResolved ? (
+                  <Routes>
+                    <Route path="/"            element={isAuthenticated ? <HomePage /> : <Navigate to="/login" replace />} />
+                    <Route path="/cars/:id"    element={isAuthenticated ? <CarDetailPage /> : <Navigate to="/login" replace />} />
+                    <Route path="/dealer/:id"  element={isAuthenticated ? <DealerProfilePage /> : <Navigate to="/login" replace />} />
+                    <Route path="/add-car"     element={isAuthenticated ? <AddCarPage /> : <Navigate to="/login" replace />} />
+                    <Route path="/messages"    element={isAuthenticated ? <MessagesPage /> : <Navigate to="/login" replace />} />
+                    <Route path="/inspections" element={isAuthenticated ? <InspectionPage /> : <Navigate to="/login" replace />} />
+                    <Route path="/profile"     element={isAuthenticated ? <ProfilePage onProfileUpdated={setUser} /> : <Navigate to="/login" replace />} />
+                    <Route path="/info/:slug"  element={isAuthenticated ? <FooterInfoPage /> : <Navigate to="/login" replace />} />
+                    <Route path="/login"       element={!isAuthenticated ? <LoginPage onLogin={setUser} /> : <Navigate to={isAdmin ? "/admin" : "/"} replace />} />
+                    <Route path="/admin"       element={isAdmin ? <AdminDashboardPage /> : <Navigate to="/login" replace />} />
+                    <Route path="*"            element={<div style={{ textAlign:"center", padding:"3rem", color:"#7a96b4" }}><h2>Page not found</h2><p>The page you're looking for doesn't exist.</p></div>} />
+                  </Routes>
+                ) : (
+                  <PageLoader />
+                )}
               </Suspense>
             </main>
           </div>

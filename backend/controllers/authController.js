@@ -4,13 +4,17 @@ import User from "../models/User.js";
 
 const client = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
 
+const normalizeEmail = (value = "") => String(value).trim().toLowerCase();
+
 const normalizeEmails = (value) =>
-  (value || "")
-    .split(",")
-    .map((email) => email.trim().toLowerCase())
+  String(value || "")
+    .split(/[\n,]/)
+    .map((entry) => entry.split("#")[0].trim().toLowerCase())
     .filter(Boolean);
 
-const isAdminEmail = (email) => normalizeEmails(process.env.ADMIN_EMAILS).includes(email.toLowerCase());
+const getAdminEmails = () => normalizeEmails(process.env.ADMIN_EMAILS || process.env.ADMIN_EMAIL);
+
+const isAdminBootstrapEmail = (email) => getAdminEmails().includes(normalizeEmail(email));
 
 const signAuthToken = (payload) => {
   const secret = process.env.APP_JWT_SECRET;
@@ -46,28 +50,40 @@ export const googleLogin = async (req, res, next) => {
       throw new Error("Invalid Google token payload");
     }
 
-    const role = isAdminEmail(payload.email) ? "admin" : "user";
+    const email = normalizeEmail(payload.email);
+    const shouldBootstrapAdmin = isAdminBootstrapEmail(email);
+    const baseRole = shouldBootstrapAdmin ? "admin" : "user";
     const googleName = payload.name || "";
-    const defaultUsername = (payload.email || "").split("@")[0].trim().toLowerCase();
+    const defaultUsername = email.split("@")[0].trim().toLowerCase();
     let userDoc = await User.findOne({ googleId: payload.sub });
+
+    console.log("[auth] Google login attempt", {
+      email,
+      adminEmails: getAdminEmails(),
+      adminBootstrapMatch: shouldBootstrapAdmin,
+      existingUser: Boolean(userDoc),
+    });
 
     if (!userDoc) {
       userDoc = await User.create({
         googleId: payload.sub,
-        email: payload.email.toLowerCase(),
+        email,
         name: googleName,
         googleName,
         username: defaultUsername,
         picture: payload.picture || "",
-        role,
+        role: baseRole,
+      });
+
+      console.log("[auth] New user created", {
+        email,
+        assignedRole: userDoc.role,
       });
     } else {
-      userDoc.email = payload.email.toLowerCase();
+      userDoc.email = email;
       userDoc.picture = payload.picture || userDoc.picture;
-      userDoc.role = role;
       userDoc.googleName = googleName || userDoc.googleName;
 
-      // Preserve profile-edited name; only backfill from Google when empty.
       if (!userDoc.name?.trim() && googleName) {
         userDoc.name = googleName;
       }
@@ -76,6 +92,11 @@ export const googleLogin = async (req, res, next) => {
       }
 
       await userDoc.save();
+
+      console.log("[auth] Existing user login", {
+        email,
+        storedRole: userDoc.role,
+      });
     }
 
     const user = {

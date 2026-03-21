@@ -74,7 +74,10 @@ const HomePage = () => {
   /* Debounce text inputs (search, city, area, model) to avoid API call every keystroke */
   const debouncedParams = useDebounce(queryParams, 400);
 
-  const { cars, loading, error, hasMore, total, loadingMore, loadMore } = useCars(debouncedParams);
+  const { cars, loading, error, hasMore, total, loadingMore, loadMore } = useCars(
+    debouncedParams,
+    { infinite: true, limit: 12 }
+  );
 
   /* Infinite scroll sentinel */
   const sentinelRef = useRef(null);
@@ -346,6 +349,13 @@ const HomePage = () => {
           <>
             <div ref={sentinelRef} style={{ height: 1 }} />
             {loadingMore && <Spinner size="sm" text="Loading more cars..." />}
+            {!loadingMore && (
+              <div style={{ display: "flex", justifyContent: "center", marginTop: "1rem" }}>
+                <button type="button" className="btn btn-secondary" onClick={loadMore}>
+                  Load more cars
+                </button>
+              </div>
+            )}
           </>
         )}
 

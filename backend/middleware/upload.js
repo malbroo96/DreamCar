@@ -2,7 +2,6 @@ import multer from "multer";
 
 const storage = multer.memoryStorage();
 
-/* ── Image filter (jpg/png/webp etc.) ── */
 const imageFileFilter = (req, file, cb) => {
   if (file.mimetype.startsWith("image/")) {
     cb(null, true);
@@ -11,7 +10,6 @@ const imageFileFilter = (req, file, cb) => {
   }
 };
 
-/* ── RC document filter (PDF, JPG, PNG only) ── */
 const rcFileFilter = (req, file, cb) => {
   const allowed = ["application/pdf", "image/jpeg", "image/png", "image/jpg"];
   if (allowed.includes(file.mimetype)) {
@@ -21,27 +19,24 @@ const rcFileFilter = (req, file, cb) => {
   }
 };
 
-/* ── Car images upload (up to 8 images) ── */
 export const upload = multer({
   storage,
   fileFilter: imageFileFilter,
   limits: {
-    fileSize: 5 * 1024 * 1024, // 5MB per image
+    fileSize: 5 * 1024 * 1024,
     files: 8,
   },
 });
 
-/* ── RC document upload (single file) ── */
 export const uploadRC = multer({
   storage,
   fileFilter: rcFileFilter,
   limits: {
-    fileSize: 5 * 1024 * 1024, // 5MB max
+    fileSize: 5 * 1024 * 1024,
     files: 1,
   },
 });
 
-/* ── Combined: images (up to 8) + RC document (1) ── */
 export const uploadCarFiles = multer({
   storage,
   limits: {
@@ -52,7 +47,6 @@ export const uploadCarFiles = multer({
   { name: "rcDocument", maxCount: 1 },
 ]);
 
-/* ── Combined filter that validates per-field ── */
 export const uploadCarFilesFiltered = multer({
   storage,
   fileFilter: (req, file, cb) => {
@@ -79,4 +73,30 @@ export const uploadCarFilesFiltered = multer({
 }).fields([
   { name: "images", maxCount: 8 },
   { name: "rcDocument", maxCount: 1 },
+]);
+
+export const uploadInspectorApplicationFiles = multer({
+  storage,
+  fileFilter: (req, file, cb) => {
+    const docsAllowed = ["application/pdf", "image/jpeg", "image/png", "image/jpg"];
+    if (["experienceCertificate", "educationCertificate", "idProof"].includes(file.fieldname)) {
+      if (docsAllowed.includes(file.mimetype)) return cb(null, true);
+      return cb(new Error("Application documents must be PDF, JPG, or PNG files"));
+    }
+
+    if (file.fieldname === "photos") {
+      if (file.mimetype.startsWith("image/")) return cb(null, true);
+      return cb(new Error("Inspection photos must be image files"));
+    }
+
+    return cb(null, false);
+  },
+  limits: {
+    fileSize: 5 * 1024 * 1024,
+  },
+}).fields([
+  { name: "experienceCertificate", maxCount: 1 },
+  { name: "educationCertificate", maxCount: 1 },
+  { name: "idProof", maxCount: 1 },
+  { name: "photos", maxCount: 8 },
 ]);

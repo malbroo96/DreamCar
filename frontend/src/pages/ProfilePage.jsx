@@ -42,10 +42,9 @@ const ProfilePage = ({ onProfileUpdated }) => {
     try {
       setLoading(true);
       setError("");
-      const [profileData, myCars, notificationData] = await Promise.all([
+      const [profileData, myCars] = await Promise.all([
         getMyProfile(),
         getCars({ mine: true }),
-        getMessageNotifications(),
       ]);
       setProfile(profileData);
       setForm({
@@ -56,7 +55,6 @@ const ProfilePage = ({ onProfileUpdated }) => {
         location: profileData.location || "",
       });
       setCars(myCars);
-      setNotifications(notificationData);
     } catch (err) {
       setError(err.response?.data?.message || "Failed to load profile");
     } finally {
@@ -65,6 +63,26 @@ const ProfilePage = ({ onProfileUpdated }) => {
   };
 
   useEffect(() => { fetchData(); }, []);
+
+  useEffect(() => {
+    if (activeTab !== "notifications") return;
+
+    let cancelled = false;
+
+    const loadNotifications = async () => {
+      try {
+        const notificationData = await getMessageNotifications();
+        if (!cancelled) setNotifications(notificationData);
+      } catch (err) {
+        if (!cancelled) {
+          setError(err.response?.data?.message || "Failed to load notifications");
+        }
+      }
+    };
+
+    loadNotifications();
+    return () => { cancelled = true; };
+  }, [activeTab]);
 
   /* ── avatar preview (local only — wire to upload API if backend supports it) ── */
   const handleAvatarChange = (e) => {

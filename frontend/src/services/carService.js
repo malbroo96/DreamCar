@@ -1,18 +1,17 @@
 import api from "./api";
 
-/* Returns plain array — used by ProfilePage, DealerProfilePage etc */
 export const getCars = async (params) => {
   const response = await api.get("/cars", { params });
   const data = response.data;
-  /* Handle both old array response and new paginated response */
   return Array.isArray(data) ? data : (data?.cars || []);
 };
 
-/* Returns full paginated response { cars, pagination } — used by useCars hook */
-export const getCarspaginated = async (params) => {
+export const getCarsPaginated = async (params) => {
   const response = await api.get("/cars", { params });
   return response.data;
 };
+
+export const getCarspaginated = getCarsPaginated;
 
 export const getCarStats = async () => {
   const response = await api.get("/cars/stats/summary");
@@ -57,7 +56,6 @@ export const deleteCar = async (id) => {
   return response.data;
 };
 
-/* ── RC auto-extraction ── */
 export const extractCarFromRC = async (file) => {
   const payload = new FormData();
   payload.append("rcDocument", file);
@@ -67,10 +65,9 @@ export const extractCarFromRC = async (file) => {
   return response.data;
 };
 
-/* ── RC Document: get a short-lived signed URL (owner/admin only) ── */
 export const getRCDocumentUrl = async (carId) => {
   const response = await api.get(`/cars/${carId}/rc-url`);
-  return response.data; // { url, expiresAt, format }
+  return response.data;
 };
 
 export const getAdminCars = async () => {

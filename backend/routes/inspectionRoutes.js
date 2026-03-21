@@ -2,36 +2,37 @@ import express from "express";
 import {
   requestInspection, getMyInspections, cancelInspection,
   getAvailableInspections, acceptInspection, getMyJobs, submitReport,
-  applyAsInspector, getMyApplication,
+  saveInspectorApplicationBasic, saveInspectorApplicationExperience,
+  saveInspectorApplicationDocuments, submitInspectorApplication, getMyApplication,
   getAllInspections, getInspectionStats, updateInspectionStatus,
-  getAllApplications, reviewApplication,
+  getAllApplications, reviewApplication, getApplicationDocumentPreview,
 } from "../controllers/inspectionController.js";
-import { protect, adminOnly } from "../middleware/auth.js";
-import { uploadCarFilesFiltered } from "../middleware/upload.js";
+import { protect, adminOnly, requireInspectorApproval } from "../middleware/auth.js";
+import { uploadInspectorApplicationFiles } from "../middleware/upload.js";
 
 const router = express.Router();
 router.use(protect);
 
-/* ── Inspector application (any logged-in user) ── */
-router.post("/apply",          uploadCarFilesFiltered, applyAsInspector);
-router.get("/my-application",  getMyApplication);
+router.get("/my-application", getMyApplication);
+router.put("/application/basic", saveInspectorApplicationBasic);
+router.put("/application/experience", saveInspectorApplicationExperience);
+router.put("/application/documents", uploadInspectorApplicationFiles, saveInspectorApplicationDocuments);
+router.post("/application/submit", submitInspectorApplication);
 
-/* ── Buyer routes ── */
 router.post("/request/:carId", requestInspection);
-router.get("/my",              getMyInspections);
-router.patch("/cancel/:id",    cancelInspection);
+router.get("/my", getMyInspections);
+router.patch("/cancel/:id", cancelInspection);
 
-/* ── Inspector routes ── */
-router.get("/available",          getAvailableInspections);
-router.patch("/accept/:id",       acceptInspection);
-router.get("/my-jobs",            getMyJobs);
-router.post("/submit-report/:id", uploadCarFilesFiltered, submitReport);
+router.get("/available", requireInspectorApproval, getAvailableInspections);
+router.patch("/accept/:id", requireInspectorApproval, acceptInspection);
+router.get("/my-jobs", requireInspectorApproval, getMyJobs);
+router.post("/submit-report/:id", requireInspectorApproval, uploadInspectorApplicationFiles, submitReport);
 
-/* ── Admin routes ── */
-router.get("/admin/all",                adminOnly, getAllInspections);
-router.get("/admin/stats",              adminOnly, getInspectionStats);
-router.patch("/admin/:id",              adminOnly, updateInspectionStatus);
-router.get("/admin/applications",       adminOnly, getAllApplications);
+router.get("/admin/all", adminOnly, getAllInspections);
+router.get("/admin/stats", adminOnly, getInspectionStats);
+router.patch("/admin/:id", adminOnly, updateInspectionStatus);
+router.get("/admin/applications", adminOnly, getAllApplications);
 router.patch("/admin/applications/:id", adminOnly, reviewApplication);
+router.get("/admin/applications/:id/documents/:docType", adminOnly, getApplicationDocumentPreview);
 
 export default router;
