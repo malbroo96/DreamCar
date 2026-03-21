@@ -13,6 +13,10 @@ import {
 import "./AdminDashboardPage.css";
 
 const STATUS_COLORS = {
+  payment_created: { bg: "#fef3c7", color: "#92400e", label: "Order Created" },
+  payment_pending: { bg: "#dbeafe", color: "#1d4ed8", label: "Payment Pending" },
+  payment_failed: { bg: "#fee2e2", color: "#991b1b", label: "Payment Failed" },
+  confirmed: { bg: "#dcfce7", color: "#166534", label: "Confirmed" },
   pending: { bg: "#fef3c7", color: "#92400e", label: "Pending" },
   approved: { bg: "#d1fae5", color: "#065f46", label: "Approved" },
   rejected: { bg: "#fee2e2", color: "#991b1b", label: "Rejected" },
@@ -155,7 +159,7 @@ const AdminDashboardPage = () => {
 
       <div className="adm-tabs">
         <button className={`adm-tab ${activeTab === "cars" ? "adm-tab--active" : ""}`} onClick={() => setActiveTab("cars")}>Car Listings <span className="adm-tab-badge">{cars.length}</span></button>
-        <button className={`adm-tab ${activeTab === "inspections" ? "adm-tab--active" : ""}`} onClick={() => setActiveTab("inspections")}>Inspections {inspStats?.requested > 0 && <span className="adm-tab-badge adm-tab-badge--alert">{inspStats.requested}</span>}</button>
+        <button className={`adm-tab ${activeTab === "inspections" ? "adm-tab--active" : ""}`} onClick={() => setActiveTab("inspections")}>Inspections {(inspStats?.created || inspStats?.pending || 0) > 0 && <span className="adm-tab-badge adm-tab-badge--alert">{(inspStats?.created || 0) + (inspStats?.pending || 0)}</span>}</button>
         <button className={`adm-tab ${activeTab === "applications" ? "adm-tab--active" : ""}`} onClick={() => setActiveTab("applications")}>Inspector Applications {inspStats?.pendingApplications > 0 && <span className="adm-tab-badge adm-tab-badge--alert">{inspStats.pendingApplications}</span>}</button>
       </div>
 
@@ -195,10 +199,12 @@ const AdminDashboardPage = () => {
             <div className="adm-stats-grid">
               {[
                 { label: "Total", value: inspStats.total, color: "#0b6ef3" },
-                { label: "Requested", value: inspStats.requested, color: "#d97706" },
-                { label: "Accepted", value: inspStats.accepted, color: "#16a34a" },
+                { label: "Created", value: inspStats.created, color: "#d97706" },
+                { label: "Pending", value: inspStats.pending, color: "#2563eb" },
+                { label: "Confirmed", value: inspStats.confirmed, color: "#16a34a" },
+                { label: "Accepted", value: inspStats.accepted, color: "#0f766e" },
                 { label: "Completed", value: inspStats.completed, color: "#7c3aed" },
-                { label: "Rejected", value: inspStats.rejected, color: "#dc2626" },
+                { label: "Failed", value: inspStats.failed, color: "#dc2626" },
               ].map((s) => (
                 <div key={s.label} className="adm-stat-card card">
                   <span className="adm-stat-value" style={{ color: s.color }}>{s.value}</span>
@@ -209,7 +215,7 @@ const AdminDashboardPage = () => {
           )}
 
           <div className="adm-filter-row">
-            {["", "requested", "accepted", "rejected", "completed"].map((s) => (
+            {["", "payment_created", "payment_pending", "confirmed", "accepted", "payment_failed", "completed"].map((s) => (
               <button key={s || "all"} type="button" className={`adm-filter-btn ${inspFilter === s ? "adm-filter-btn--active" : ""}`} onClick={() => setInspFilter(s)}>{s || "all"}</button>
             ))}
           </div>
@@ -237,7 +243,7 @@ const AdminDashboardPage = () => {
                   </div>
                   <div className="adm-insp-actions">
                     <button className="btn btn-secondary" onClick={() => setSelectedInsp(isSelected ? null : insp)}>{isSelected ? "Close" : "Manage"}</button>
-                    {insp.status === "requested" && <button className="btn btn-primary" onClick={() => handleUpdateInspection(insp._id, "accepted")} disabled={updatingInsp}>Accept</button>}
+                    {insp.status === "confirmed" && <button className="btn btn-primary" onClick={() => handleUpdateInspection(insp._id, "accepted")} disabled={updatingInsp}>Assign</button>}
                     {insp.status !== "completed" && <button className="btn btn-danger" onClick={() => handleUpdateInspection(insp._id, "rejected")} disabled={updatingInsp}>Reject</button>}
                   </div>
                   {isSelected && (

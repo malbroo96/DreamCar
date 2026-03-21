@@ -17,7 +17,10 @@ import {
 import "./InspectionPage.css";
 
 const STATUS_CONFIG = {
-  requested: { label: "Requested", color: "#d97706", bg: "#fef3c7" },
+  payment_created: { label: "Order Created", color: "#d97706", bg: "#fef3c7" },
+  payment_pending: { label: "Payment Pending", color: "#2563eb", bg: "#dbeafe" },
+  payment_failed: { label: "Payment Failed", color: "#dc2626", bg: "#fee2e2" },
+  confirmed: { label: "Confirmed", color: "#16a34a", bg: "#dcfce7" },
   accepted: { label: "Accepted", color: "#0891b2", bg: "#e0f2fe" },
   completed: { label: "Completed", color: "#16a34a", bg: "#dcfce7" },
   rejected: { label: "Rejected", color: "#dc2626", bg: "#fee2e2" },
@@ -68,7 +71,7 @@ const StarRating = ({ value, onChange }) => (
 );
 
 const StatusBadge = ({ status }) => {
-  const cfg = STATUS_CONFIG[status] || STATUS_CONFIG.requested;
+  const cfg = STATUS_CONFIG[status] || STATUS_CONFIG.payment_created;
   return <span className="insp-status-badge" style={{ background: cfg.bg, color: cfg.color }}>{cfg.label}</span>;
 };
 
@@ -345,11 +348,12 @@ const InspectionPage = () => {
                     <p className="insp-car-sub">{insp.carBrand} {insp.carModel} · {insp.carYear}</p>
                     <div className="insp-card-meta">
                       <StatusBadge status={insp.status} />
+                      {insp.paymentStatus && <span className="insp-meta-chip">Payment: {insp.paymentStatus}</span>}
                       {insp.location && <span className="insp-meta-chip">📍 {insp.location}</span>}
                     </div>
                   </div>
                 </div>
-                {["requested", "accepted"].includes(insp.status) && (
+                  {["payment_created", "payment_pending", "confirmed", "accepted"].includes(insp.status) && (
                   <button type="button" className="btn btn-danger" onClick={() => handleCancel(insp._id)}>Cancel Request</button>
                 )}
               </div>
@@ -362,7 +366,7 @@ const InspectionPage = () => {
         <div className="insp-section">
           <div className="insp-section-header">
             <h2>Available Jobs</h2>
-            <p>Only approved inspectors can see and accept these jobs.</p>
+            <p>Confirmed and paid jobs that still need a manual inspector assignment.</p>
           </div>
           {inspLoading && <div className="insp-loading">Loading...</div>}
           {!inspLoading && available.length === 0 && <div className="insp-empty"><div className="insp-empty-icon">📋</div><h3>No available jobs</h3><p>New requests will appear here.</p></div>}
@@ -390,7 +394,7 @@ const InspectionPage = () => {
         <div className="insp-section">
           <div className="insp-section-header">
             <h2>My Jobs</h2>
-            <p>Accepted jobs and inspection report submission.</p>
+            <p>Assigned jobs and inspection report submission for paid bookings.</p>
           </div>
           {inspLoading && <div className="insp-loading">Loading...</div>}
           {!inspLoading && myJobs.length === 0 && <div className="insp-empty"><div className="insp-empty-icon">🛠</div><h3>No jobs yet</h3><p>Accept available requests to get started.</p></div>}

@@ -14,6 +14,7 @@ import messageRoutes from "./routes/messageRoutes.js";
 import aiRoutes from "./routes/aiRoutes.js";
 import chatbotRouter from "./routes/chatbot.js";
 import inspectionRoutes from "./routes/inspectionRoutes.js";
+import paymentRoutes from "./routes/paymentRoutes.js";
 import { registerMessageSocketHandlers } from "./socket/messageSocket.js";
 import { errorHandler, notFound } from "./middleware/errorHandler.js";
 
@@ -30,7 +31,13 @@ const io = new SocketIOServer(server, {
 registerMessageSocketHandlers(io);
 
 app.use(cors({ origin: allowedOrigins.length ? allowedOrigins : true, credentials: true }));
-app.use(express.json());
+app.use(express.json({
+  verify: (req, _res, buf) => {
+    if (req.originalUrl === "/api/payments/webhook") {
+      req.rawBody = buf.toString("utf8");
+    }
+  },
+}));
 app.use(express.urlencoded({ extended: true }));
 app.use(morgan("dev"));
 
@@ -75,6 +82,7 @@ app.use("/api/messages",    messageRoutes);
 app.use("/api/ai",          aiRoutes);
 app.use("/api/chat",        chatbotRouter);
 app.use("/api/inspections", inspectionRoutes);
+app.use("/api/payments",    paymentRoutes);
 
 app.use(notFound);
 app.use(errorHandler);
