@@ -24,6 +24,7 @@ const PORT   = process.env.PORT || 5000;
 
 const allowedOrigins = (process.env.ALLOWED_ORIGINS || process.env.FRONTEND_URL || "")
   .split(",").map((o) => o.trim()).filter(Boolean);
+const isProduction = process.env.NODE_ENV === "production";
 
 const io = new SocketIOServer(server, {
   cors: { origin: allowedOrigins.length ? allowedOrigins : true, credentials: true },
@@ -44,7 +45,7 @@ app.use(morgan("dev"));
 /* ── Rate limiters ── */
 const generalLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 200,
+  max: isProduction ? 500 : 5000,
   standardHeaders: true,
   legacyHeaders: false,
   message: { message: "Too many requests, please try again later." },
@@ -52,7 +53,10 @@ const generalLimiter = rateLimit({
 
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 20, // stricter for auth
+  max: isProduction ? 20 : 100,
+  standardHeaders: true,
+  legacyHeaders: false,
+  skipSuccessfulRequests: true,
   message: { message: "Too many auth attempts, please try again later." },
 });
 
@@ -69,11 +73,11 @@ const uploadLimiter = rateLimit({
 });
 
 app.use("/api", generalLimiter);
-app.use("/api/auth", authLimiter);
 app.use("/api/chat", chatLimiter);
 
 app.get("/api/health", (_, res) => res.json({ ok: true, service: "dreamcar-backend" }));
 
+app.use("/api/auth/google", authLimiter);
 app.use("/api/cars",        carRoutes);
 app.use("/api/admin",       adminRoutes);
 app.use("/api/auth",        authRoutes);

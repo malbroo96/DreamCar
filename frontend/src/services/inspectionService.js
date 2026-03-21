@@ -1,7 +1,35 @@
 import api from "./api";
 
+const MY_INSPECTIONS_CACHE_TTL_MS = 10 * 1000;
+
+let myInspectionsRequest = null;
+let myInspectionsCache = {
+  data: null,
+  fetchedAt: 0,
+};
+
 export const requestInspection = (carId, data) => api.post(`/inspections/request/${carId}`, data).then((r) => r.data);
-export const getMyInspections = () => api.get("/inspections/my").then((r) => r.data);
+export const getMyInspections = ({ force = false } = {}) => {
+  if (!force && myInspectionsCache.fetchedAt && Date.now() - myInspectionsCache.fetchedAt < MY_INSPECTIONS_CACHE_TTL_MS) {
+    return Promise.resolve(myInspectionsCache.data);
+  }
+
+  if (myInspectionsRequest) return myInspectionsRequest;
+
+  myInspectionsRequest = api.get("/inspections/my")
+    .then((response) => {
+      myInspectionsCache = {
+        data: response.data,
+        fetchedAt: Date.now(),
+      };
+      return response.data;
+    })
+    .finally(() => {
+      myInspectionsRequest = null;
+    });
+
+  return myInspectionsRequest;
+};
 export const cancelInspection = (id) => api.patch(`/inspections/cancel/${id}`).then((r) => r.data);
 
 export const getAvailableInspections = () => api.get("/inspections/available").then((r) => r.data);
@@ -24,3 +52,11 @@ export const getAllApplications = (params = {}) =>
 export const reviewApplication = (id, data) => api.patch(`/inspections/admin/applications/${id}`, data).then((r) => r.data);
 export const getApplicationDocumentPreview = (id, docType) =>
   api.get(`/inspections/admin/applications/${id}/documents/${docType}`).then((r) => r.data);
+
+export const clearInspectionCache = () => {
+  myInspectionsRequest = null;
+  myInspectionsCache = {
+    data: null,
+    fetchedAt: 0,
+  };
+};

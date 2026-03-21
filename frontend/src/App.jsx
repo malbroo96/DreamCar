@@ -7,7 +7,8 @@ import ChatbotWidget from "./components/chatbot/ChatbotWidget";
 import CarsAnimation from "./components/CarsAnimation";
 import useDocumentMeta from "./hooks/useDocumentMeta";
 import { getStoredUser, logout, refreshCurrentUser, setStoredUser } from "./services/authService";
-import { getMessageNotifications } from "./services/messageService";
+import { clearMessageNotificationCache, getMessageNotifications } from "./services/messageService";
+import { clearInspectionCache } from "./services/inspectionService";
 import useScrollReveal from "./hooks/useScrollReveal";
 import "./App.css";
 
@@ -181,6 +182,7 @@ const App = () => {
     if (!isAuthenticated) return;
     let mounted = true;
     const load = async () => {
+      if (document.visibilityState !== "visible") return;
       try {
         const data = await getMessageNotifications();
         if (mounted) setUnreadCount(Number(data?.unreadCount || 0));
@@ -189,12 +191,24 @@ const App = () => {
       }
     };
     load();
-    const id = setInterval(load, 20000);
-    return () => { mounted = false; clearInterval(id); };
+    const id = setInterval(load, 60000);
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        load();
+      }
+    };
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    return () => {
+      mounted = false;
+      clearInterval(id);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
   }, [isAuthenticated]);
 
   const handleLogout = () => {
     logout();
+    clearMessageNotificationCache();
+    clearInspectionCache();
     setUnreadCount(0);
     setUser(null);
     setMobileNavOpen(false);
