@@ -49,6 +49,64 @@ const getPrimaryLocation = (value = "") =>
     .trim()
     .toLowerCase();
 
+const DEFAULT_REVIEWS = [
+  {
+    name: "Shahana P.",
+    city: "Malappuram",
+    rating: 5,
+    text: "The interface feels very user-friendly and clean. I could browse cars, compare details, and understand the page flow without needing any help.",
+    date: "March 2026",
+  },
+  {
+    name: "Rinshad K.",
+    city: "Manjeri",
+    rating: 5,
+    text: "I really liked how simple everything looks. The user-friendly design made searching, filtering, and checking car details feel fast and comfortable.",
+    date: "March 2026",
+  },
+  {
+    name: "Fathima N.",
+    city: "Kottakkal",
+    rating: 5,
+    text: "The platform is easy to use even for first-time buyers. The layout is clear, the buttons are easy to find, and the whole experience feels smooth.",
+    date: "February 2026",
+  },
+  {
+    name: "Nihal T.",
+    city: "Perinthalmanna",
+    rating: 5,
+    text: "What stood out for me was the user-friendly interface. Everything is organized well, so I could move from listings to chat without confusion.",
+    date: "March 2026",
+  },
+  {
+    name: "Ameena V.",
+    city: "Tirur",
+    rating: 5,
+    text: "The design is simple in a very good way. It feels easy to navigate, and I appreciated how quickly I could find the information I needed.",
+    date: "February 2026",
+  },
+  {
+    name: "Adil R.",
+    city: "Kondotty",
+    rating: 5,
+    text: "This is one of the most user-friendly car apps I have tried. The interface is neat, responsive, and makes the whole buying journey feel easier.",
+    date: "March 2026",
+  },
+];
+
+const FEEDBACK_LOCATIONS = [
+  "Malappuram",
+  "Manjeri",
+  "Tirur",
+  "Perinthalmanna",
+  "Kondotty",
+  "Nilambur",
+  "Ponnani",
+  "Kottakkal",
+];
+
+const FEEDBACK_STORAGE_KEY = "dreamcar-home-feedback";
+
 const HomePage = () => {
   const navigate = useNavigate();
   const [filters, setFilters] = useState(defaultFilters);
@@ -116,6 +174,16 @@ const HomePage = () => {
   const [emiDown, setEmiDown]     = useState(20);
   const [emiRate, setEmiRate]     = useState(8.5);
   const [emiMonths, setEmiMonths] = useState(60);
+  const [reviewForm, setReviewForm] = useState({
+    name: user?.name?.trim() || "",
+    city: "Malappuram",
+    rating: 5,
+    text: "",
+  });
+  const [submittedReviews, setSubmittedReviews] = useState([]);
+  const [feedbackError, setFeedbackError] = useState("");
+  const [feedbackSuccess, setFeedbackSuccess] = useState("");
+  const [feedbackSubmitted, setFeedbackSubmitted] = useState(false);
 
   const userCity = useMemo(() => getPrimaryLocation(user?.location), [user]);
   const sortCarsByNearby = (list) => {
@@ -142,6 +210,7 @@ const HomePage = () => {
     { value: stats.citiesCovered.toLocaleString("en-IN"), label: "Cities Covered" },
     { value: stats.verifiedListings.toLocaleString("en-IN"), label: "Verified Listings" },
   ]), [stats]);
+  const reviews = useMemo(() => [...submittedReviews, ...DEFAULT_REVIEWS], [submittedReviews]);
 
   const scrollToListings = () => {
     document.getElementById("car-listings")?.scrollIntoView({ behavior: "smooth" });
@@ -187,6 +256,70 @@ const HomePage = () => {
 
   const openFooterPage = (slug) => {
     navigate(`/info/${slug}`);
+  };
+
+  useEffect(() => {
+    try {
+      const stored = window.localStorage.getItem(FEEDBACK_STORAGE_KEY);
+      if (!stored) return;
+      const parsed = JSON.parse(stored);
+      if (Array.isArray(parsed)) {
+        setSubmittedReviews(parsed);
+        setFeedbackSubmitted(parsed.length > 0);
+      }
+    } catch {
+      // Ignore local storage parsing failures and keep defaults.
+    }
+  }, []);
+
+  useEffect(() => {
+    setReviewForm((prev) => ({
+      ...prev,
+      name: prev.name || user?.name?.trim() || "",
+    }));
+  }, [user]);
+
+  const handleReviewFormChange = (event) => {
+    const { name, value } = event.target;
+    setReviewForm((prev) => ({
+      ...prev,
+      [name]: name === "rating" ? Number(value) : value,
+    }));
+  };
+
+  const handleReviewSubmit = (event) => {
+    event.preventDefault();
+    setFeedbackError("");
+    setFeedbackSuccess("");
+
+    const name = reviewForm.name.trim();
+    const text = reviewForm.text.trim();
+    const city = reviewForm.city.trim();
+
+    if (!name || !text || !city) {
+      setFeedbackError("Please fill in your name, location, and feedback.");
+      return;
+    }
+
+    const newReview = {
+      name,
+      city,
+      rating: Number(reviewForm.rating) || 5,
+      text,
+      date: new Date().toLocaleString("en-IN", { month: "long", year: "numeric" }),
+    };
+
+    const nextReviews = [newReview, ...submittedReviews].slice(0, 10);
+    setSubmittedReviews(nextReviews);
+    window.localStorage.setItem(FEEDBACK_STORAGE_KEY, JSON.stringify(nextReviews));
+    setFeedbackSubmitted(true);
+    setReviewForm({
+      name,
+      city: "Malappuram",
+      rating: 5,
+      text: "",
+    });
+    setFeedbackSuccess("Thanks for sharing your feedback. It is now visible in the reviews section.");
   };
 
   return (
@@ -470,15 +603,8 @@ const HomePage = () => {
           </div>
         </div>
         <div className="reviews-scroll">
-          {[
-            { name: "Aravind K.", city: "Chennai", rating: 5, text: "Found my dream Swift in under 10 minutes. The RC verification badge gave me full confidence. Super smooth process!", date: "March 2026" },
-            { name: "Priya M.", city: "Bangalore", rating: 5, text: "Listed my Honda City and got 3 serious inquiries within a day. The chat feature made it easy to respond quickly.", date: "February 2026" },
-            { name: "Rahul S.", city: "Mumbai", rating: 5, text: "The health check report on the car I bought was detailed and accurate. No surprises after purchase. Highly recommended.", date: "March 2026" },
-            { name: "Deepika R.", city: "Hyderabad", rating: 4, text: "EMI calculator helped me plan my budget perfectly. Bought a 2021 Nexon at a great price. DreamCar is the future!", date: "January 2026" },
-            { name: "Vikram N.", city: "Pune", rating: 5, text: "DreamBot answered all my questions at midnight when I was comparing two cars. Amazing AI assistant. 10/10 experience.", date: "February 2026" },
-            { name: "Sunita P.", city: "Delhi", rating: 5, text: "The dealer profile page helped me check the seller's history before buying. Felt very safe and transparent throughout.", date: "March 2026" },
-          ].map((r) => (
-            <div key={r.name} className="review-card card">
+          {reviews.map((r, index) => (
+            <div key={`${r.name}-${r.city}-${index}`} className="review-card card">
               <div className="review-stars">{"★".repeat(r.rating)}{"☆".repeat(5 - r.rating)}</div>
               <p className="review-text">"{r.text}"</p>
               <div className="review-author">
@@ -488,39 +614,102 @@ const HomePage = () => {
                   <p className="review-meta">{r.city} · {r.date}</p>
                 </div>
               </div>
+              {index === 0 && submittedReviews.length > 0 && (
+                <span className="review-badge">New feedback</span>
+              )}
             </div>
           ))}
+        </div>
+        <div className="feedback-panel card">
+          <div className="feedback-panel-copy">
+            <h3 className="feedback-panel-title">Add your feedback</h3>
+            <p className="feedback-panel-text">
+              Share what you liked about the user-friendly interface and suggest what we can improve next.
+            </p>
+          </div>
+          {feedbackSubmitted ? (
+            <div className="feedback-thanks" aria-live="polite">
+              <div className="feedback-thanks-stars">
+                {"★".repeat(submittedReviews[0]?.rating || 5)}
+                {"☆".repeat(5 - (submittedReviews[0]?.rating || 5))}
+              </div>
+              <h4 className="feedback-thanks-title">Thank you for your feedback</h4>
+              <p className="feedback-thanks-text">
+                Your feedback has been added to the reviews section and will help improve the experience.
+              </p>
+              <button
+                type="button"
+                className="btn btn-secondary"
+                onClick={() => {
+                  setFeedbackSubmitted(false);
+                  setFeedbackSuccess("");
+                }}
+              >
+                Edit Feedback
+              </button>
+            </div>
+          ) : (
+            <form className="feedback-form" onSubmit={handleReviewSubmit}>
+              <div className="feedback-form-grid">
+                <label className="feedback-field">
+                  <span>Name</span>
+                  <input
+                    type="text"
+                    name="name"
+                    value={reviewForm.name}
+                    onChange={handleReviewFormChange}
+                    placeholder="Your name"
+                  />
+                </label>
+                <label className="feedback-field">
+                  <span>Location</span>
+                  <select name="city" value={reviewForm.city} onChange={handleReviewFormChange}>
+                    {FEEDBACK_LOCATIONS.map((city) => (
+                      <option key={city} value={city}>{city}</option>
+                    ))}
+                  </select>
+                </label>
+                <label className="feedback-field">
+                  <span>Rating</span>
+                  <div className="feedback-stars" role="radiogroup" aria-label="Choose a rating">
+                    {[1, 2, 3, 4, 5].map((rating) => {
+                      const active = rating <= reviewForm.rating;
+                      return (
+                        <button
+                          key={rating}
+                          type="button"
+                          className={`feedback-star-btn${active ? " feedback-star-btn--active" : ""}`}
+                          onClick={() => setReviewForm((prev) => ({ ...prev, rating }))}
+                          aria-label={`${rating} star${rating > 1 ? "s" : ""}`}
+                          aria-checked={reviewForm.rating === rating}
+                          role="radio"
+                        >
+                          ★
+                        </button>
+                      );
+                    })}
+                    <span className="feedback-stars-label">{reviewForm.rating}/5</span>
+                  </div>
+                </label>
+              </div>
+              <label className="feedback-field">
+                <span>Feedback</span>
+                <textarea
+                  name="text"
+                  value={reviewForm.text}
+                  onChange={handleReviewFormChange}
+                  rows="4"
+                  placeholder="Tell us what felt easy to use and what you would like to see improved."
+                />
+              </label>
+              {feedbackError && <p className="feedback-message feedback-message--error">{feedbackError}</p>}
+              {feedbackSuccess && <p className="feedback-message feedback-message--success">{feedbackSuccess}</p>}
+              <button type="submit" className="btn btn-primary">Submit Feedback</button>
+            </form>
+          )}
         </div>
       </section>
 
-      {/* ═══════════════════════════════════════
-          AUTO NEWS / BLOG
-      ═══════════════════════════════════════ */}
-      <section className="home-section">
-        <div className="home-section-header">
-          <h2 className="home-section-title">Latest from AutoVerse</h2>
-          <p className="home-section-sub">Stay updated with the Indian auto industry</p>
-        </div>
-        <div className="news-grid">
-          {[
-            { tag: "Buying Guide", title: "Top 5 Pre-Owned Cars Under ₹5 Lakh in 2026", img: "https://images.unsplash.com/photo-1542362567-b07e54358753?w=400&q=80", read: "3 min read" },
-            { tag: "Tips & Tricks", title: "How to Inspect a Used Car Before Buying — Complete Checklist", img: "https://images.unsplash.com/photo-1486262715619-67b85e0b08d3?w=400&q=80", read: "5 min read" },
-            { tag: "Market Update", title: "Used Car Prices in India: What's Changing in 2026?", img: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=400&q=80", read: "4 min read" },
-            { tag: "EV Special", title: "Best Pre-Owned Electric Cars Available Right Now in India", img: "https://images.unsplash.com/photo-1593941707882-a5bba14938c7?w=400&q=80", read: "4 min read" },
-          ].map((n) => (
-            <div key={n.title} className="news-card card">
-              <div className="news-img-wrap">
-                <img src={n.img} alt={n.title} className="news-img" />
-                <span className="news-tag">{n.tag}</span>
-              </div>
-              <div className="news-body">
-                <h3 className="news-title">{n.title}</h3>
-                <p className="news-meta">DreamCar AutoVerse · {n.read}</p>
-              </div>
-            </div>
-          ))}
-        </div>
-      </section>
 
       {/* ═══════════════════════════════════════
           FOOTER
