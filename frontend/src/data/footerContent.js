@@ -324,14 +324,14 @@ export const FOOTER_CONTENT = {
   feedback: {
     title: "Feedback",
     category: "Help & Support",
-    intro: "DreamCar improves faster when users share what is working well and what needs attention.",
+    intro: "DreamCar grows better when users share what they love about the user-friendly interface and the improvements they want next.",
     sections: [
       {
         heading: "Good Feedback Includes",
         points: [
-          "What page or feature you used",
-          "What felt confusing or especially helpful",
-          "What change would improve the experience for buyers or sellers",
+          "What page or feature felt especially easy to use",
+          "Which part of the interface felt clear, smooth, or user-friendly",
+          "What small change would make buying or selling even easier",
         ],
       },
     ],
