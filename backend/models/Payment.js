@@ -50,9 +50,18 @@ const refundSchema = new mongoose.Schema(
 
 const paymentSchema = new mongoose.Schema(
   {
-    bookingId: { type: mongoose.Schema.Types.ObjectId, ref: "Inspection", required: true, index: true },
+    bookingId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Inspection",
+      required: true,
+      index: true,
+    },
     bookingSnapshot: {
-      carId: { type: mongoose.Schema.Types.ObjectId, ref: "Car", required: true },
+      carId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "Car",
+        required: true,
+      },
       carTitle: { type: String, trim: true, default: "" },
       buyerId: { type: String, required: true, index: true },
       sellerId: { type: String, default: "" },
@@ -65,7 +74,12 @@ const paymentSchema = new mongoose.Schema(
       index: true,
     },
     amount: { type: Number, required: true, min: 1 },
-    currency: { type: String, default: "INR", uppercase: true, trim: true },
+    currency: {
+      type: String,
+      default: "INR",
+      uppercase: true,
+      trim: true,
+    },
     receipt: { type: String, required: true, unique: true, trim: true },
     notes: { type: mongoose.Schema.Types.Mixed, default: {} },
     razorpay: {
@@ -79,7 +93,10 @@ const paymentSchema = new mongoose.Schema(
     },
     splitRule: { type: splitRuleSchema, default: () => ({}) },
     refund: { type: refundSchema, default: () => ({}) },
-    attempts: { type: [paymentAttemptSchema], default: () => [{ status: "created", note: "Order created" }] },
+    attempts: {
+      type: [paymentAttemptSchema],
+      default: () => [{ status: "created", note: "Order created" }],
+    },
     webhook: {
       lastEventId: { type: String, default: "", trim: true },
       lastEventType: { type: String, default: "", trim: true },
@@ -96,14 +113,17 @@ const paymentSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
-paymentSchema.index({ bookingId: 1, status: 1 });
+// ✅ SINGLE (correct) compound index
 paymentSchema.index(
   { bookingId: 1, status: 1 },
   {
     unique: true,
-    partialFilterExpression: { status: { $in: ["created", "pending", "paid"] } },
+    partialFilterExpression: {
+      status: { $in: ["created", "pending", "paid"] },
+    },
   }
 );
 
 const Payment = mongoose.model("Payment", paymentSchema);
+
 export default Payment;
