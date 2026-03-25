@@ -92,5 +92,7 @@ app.use(notFound);
 app.use(errorHandler);
 
 connectDB()
-  .then(() => server.listen(PORT, () => console.log(`Server running on port ${PORT}`)))
+  .then(() => server.listen(PORT, () => {
+    console.log(`Server running on port ${PORT}`);
+  }))
   .catch((err) => { console.error("Failed to start server", err); process.exit(1); });
