@@ -176,6 +176,15 @@ export const handleChatSupport = async (req, res) => {
 
     return res.json({ content });
   } catch (error) {
+    const status = error?.status ?? error?.response?.status ?? error?.cause?.status;
+    const msg = error?.message || String(error);
+    const is429 = status === 429 || /\\[429\\s+Too\\s+Many\\s+Requests\\]/i.test(msg) || /quota exceeded/i.test(msg);
+    if (is429) {
+      return res.status(429).json({
+        message:
+          "AI support is temporarily unavailable (Gemini quota exceeded). Please add billing/increase quota for your Gemini API key and try again.",
+      });
+    }
     console.error("Chat support error:", error?.message || error);
     return res.status(500).json({ message: "Something went wrong. Please try again." });
   }

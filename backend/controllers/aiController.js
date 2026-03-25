@@ -6,6 +6,11 @@ const handleGeminiSdkError = (error, res, fallbackMessage) => {
     Number.isInteger(rawStatus) && rawStatus >= 100 && rawStatus <= 599 ? rawStatus : null;
   const message = error?.message || fallbackMessage;
 
+  if (status === 429 || /\\[429\\s+Too\\s+Many\\s+Requests\\]/i.test(message) || /quota exceeded/i.test(message)) {
+    res.status(429);
+    throw new Error(`Gemini quota exceeded (429): ${message}`);
+  }
+
   if (status === 400 || /(^|\\D)400(\\D|$)/.test(message)) {
     res.status(400);
     throw new Error(`Gemini request error (400): ${message}`);
