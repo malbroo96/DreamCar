@@ -3,6 +3,7 @@ import Inspection from "../models/Inspection.js";
 import Payment from "../models/Payment.js";
 import PaymentWebhookEvent from "../models/PaymentWebhookEvent.js";
 import { assignInspectorToInspection } from "./inspectionAssignmentService.js";
+import { createAndEmitNotification } from "./notificationService.js";
 import { createRazorpayOrder } from "./razorpayApiService.js";
 import { createWebhookEventFingerprint } from "../utils/crypto.js";
 import logger from "../utils/logger.js";

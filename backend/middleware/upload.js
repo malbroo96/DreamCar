@@ -75,6 +75,15 @@ export const uploadCarFilesFiltered = multer({
   { name: "rcDocument", maxCount: 1 },
 ]);
 
+export const uploadChatImage = multer({
+  storage,
+  fileFilter: imageFileFilter,
+  limits: {
+    fileSize: 5 * 1024 * 1024,
+    files: 1,
+  },
+}).single("image");
+
 export const uploadInspectorApplicationFiles = multer({
   storage,
   fileFilter: (req, file, cb) => {

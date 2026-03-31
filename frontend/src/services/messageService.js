@@ -55,6 +55,16 @@ export const sendThreadMessage = async (threadId, text) => {
   return response.data;
 };
 
+export const sendImageMessage = async (threadId, file, text = "") => {
+  const formData = new FormData();
+  formData.append("image", file);
+  if (text) formData.append("text", text);
+  const response = await api.post(`/messages/threads/${threadId}/images`, formData, {
+    headers: { "Content-Type": "multipart/form-data" },
+  });
+  return response.data;
+};
+
 export const clearMessageNotificationCache = () => {
   notificationRequest = null;
   notificationCache = {

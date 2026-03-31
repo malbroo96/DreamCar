@@ -2,6 +2,7 @@ import Car from "../models/Car.js";
 import Message from "../models/Message.js";
 import MessageThread from "../models/MessageThread.js";
 import User from "../models/User.js";
+import cloudinary from "../config/cloudinary.js";
 
 const formatParticipant = (thread, currentUserId) => {
   if (thread.buyerId === currentUserId) {
@@ -147,13 +148,55 @@ export const getThreads = async (req, res, next) => {
     const query = req.user.role === "admin" ? {} : { participants: req.user.id };
     const threads = await MessageThread.find(query).sort({ lastMessageAt: -1 });
 
-    const payload = threads.map((thread) => ({
-      _id: thread._id,
-      carId: thread.carId,
-      carTitle: thread.carTitle,
-      lastMessageAt: thread.lastMessageAt,
-      participant: formatParticipant(thread, req.user.id),
-    }));
+    if (!threads.length) return res.json([]);
+
+    const threadIds = threads.map((t) => t._id);
+
+    const [lastMessages, unreadCounts] = await Promise.all([
+      Message.aggregate([
+        { $match: { threadId: { $in: threadIds } } },
+        { $sort: { createdAt: -1 } },
+        { $group: {
+          _id: "$threadId",
+          text: { $first: "$text" },
+          image: { $first: "$image" },
+          senderName: { $first: "$senderName" },
+          senderId: { $first: "$senderId" },
+          createdAt: { $first: "$createdAt" },
+        }},
+      ]),
+      Message.aggregate([
+        { $match: {
+          threadId: { $in: threadIds },
+          senderId: { $ne: req.user.id },
+          readBy: { $ne: req.user.id },
+        }},
+        { $group: { _id: "$threadId", count: { $sum: 1 } } },
+      ]),
+    ]);
+
+    const lastMsgMap = new Map(lastMessages.map((m) => [String(m._id), m]));
+    const unreadMap = new Map(unreadCounts.map((u) => [String(u._id), u.count]));
+
+    const payload = threads.map((thread) => {
+      const tid = String(thread._id);
+      const last = lastMsgMap.get(tid);
+      return {
+        _id: thread._id,
+        carId: thread.carId,
+        carTitle: thread.carTitle,
+        lastMessageAt: thread.lastMessageAt,
+        participant: formatParticipant(thread, req.user.id),
+        unreadCount: unreadMap.get(tid) || 0,
+        lastMessage: last ? {
+          text: last.text,
+          image: last.image || null,
+          senderName: last.senderName,
+          senderId: last.senderId,
+          createdAt: last.createdAt,
+        } : null,
+      };
+    });
 
     res.json(payload);
   } catch (error) {
@@ -220,6 +263,67 @@ export const sendThreadMessage = async (req, res, next) => {
 
     thread.lastMessageAt = new Date();
     await thread.save();
+
+    res.status(201).json(message);
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const sendImageMessage = async (req, res, next) => {
+  try {
+    const thread = await MessageThread.findById(req.params.threadId);
+    if (!ensureThreadAccess(thread, req)) {
+      res.status(404);
+      throw new Error("Thread not found");
+    }
+
+    if (!req.file) {
+      res.status(400);
+      throw new Error("Image file is required");
+    }
+
+    const b64 = req.file.buffer.toString("base64");
+    const dataUri = `data:${req.file.mimetype};base64,${b64}`;
+
+    const uploaded = await cloudinary.uploader.upload(dataUri, {
+      folder: "dreamcar/chat-images",
+      resource_type: "image",
+      transformation: [{ width: 1200, crop: "limit" }],
+    });
+
+    const message = await Message.create({
+      threadId: thread._id,
+      senderId: req.user.id,
+      senderName: req.user.name || req.user.email,
+      text: req.body?.text || "",
+      image: {
+        url: uploaded.secure_url,
+        publicId: uploaded.public_id,
+        width: uploaded.width,
+        height: uploaded.height,
+      },
+      readBy: [req.user.id],
+    });
+
+    thread.lastMessageAt = new Date();
+    await thread.save();
+
+    const io = req.app.get("io");
+    if (io) {
+      const threadRoomName = `thread:${thread._id}`;
+      io.to(threadRoomName).emit("message:new", {
+        threadId: String(thread._id),
+        message,
+      });
+      const userRoom = (uid) => `user:${uid}`;
+      thread.participants.forEach((pid) => {
+        io.to(userRoom(pid)).emit("thread:updated", {
+          threadId: String(thread._id),
+          lastMessageAt: thread.lastMessageAt,
+        });
+      });
+    }
 
     res.status(201).json(message);
   } catch (error) {

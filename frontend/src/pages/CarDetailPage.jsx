@@ -636,9 +636,9 @@ const CarDetailPage = () => {
               </div>
 
               <div className="cdp-insp-info">
-                <span>â‚¹</span>
+                <span>{"\u20B9"}</span>
                 <span>
-                  Inspection fee: {inspectionAmount ? `â‚¹${Number(inspectionAmount / 100).toLocaleString("en-IN")}` : "Calculated securely on the backend at checkout"}
+                  Inspection fee: {inspectionAmount ? `\u20B9${Number(inspectionAmount / 100).toLocaleString("en-IN")}` : "Calculated securely on the backend at checkout"}
                 </span>
               </div>
 

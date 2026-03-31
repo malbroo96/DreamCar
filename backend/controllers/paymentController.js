@@ -1,3 +1,4 @@
+import Payment from "../models/Payment.js";
 import {
   createInspectionOrder,
   finalizeCapturedPayment,

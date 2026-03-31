@@ -39,6 +39,9 @@ const ChatbotWidget = () => {
   const [error, setError] = useState("");
   const [showSuggestions, setShowSuggestions] = useState(true);
 
+  const messagesRef = useRef(messages);
+  messagesRef.current = messages;
+
   const messagesEndRef = useRef(null);
   const inputRef = useRef(null);
 
@@ -76,7 +79,7 @@ const ChatbotWidget = () => {
     setShowSuggestions(false);
 
     /* Build history for the API (exclude welcome message, use only role+content) */
-    const history = messages
+    const history = messagesRef.current
       .filter((m) => m.id !== "welcome")
       .map(({ role, content }) => ({ role, content }));
 

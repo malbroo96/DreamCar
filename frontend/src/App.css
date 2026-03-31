@@ -3,6 +3,28 @@
    Theme: Professional dark navy + gold
 ═══════════════════════════════════════════════ */
 
+/* ── Skip to content (a11y) ── */
+.skip-to-content {
+  position: absolute;
+  top: -100px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--color-accent);
+  color: #fff;
+  padding: 0.6rem 1.2rem;
+  border-radius: 0 0 8px 8px;
+  font-weight: 700;
+  font-size: 0.85rem;
+  z-index: 9999;
+  transition: top 0.2s;
+  text-decoration: none;
+}
+.skip-to-content:focus {
+  top: 0;
+  outline: 2px solid #fff;
+  outline-offset: 2px;
+}
+
 /* ── Shell ── */
 .app-shell {
   min-height: 100vh;
@@ -12,6 +34,32 @@
 .app-content-wrapper {
   position: relative;
   z-index: 1;
+}
+
+/* ── Theme toggle ── */
+.theme-toggle {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  border: 1px solid rgba(212,175,55,0.25);
+  background: rgba(255,255,255,0.06);
+  color: #d4af37;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: all 0.2s;
+}
+.theme-toggle:hover {
+  background: rgba(212,175,55,0.15);
+  border-color: rgba(212,175,55,0.5);
+  transform: rotate(15deg);
+}
+.topbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
 }
 
 /* ══════════════════════════════════════════
@@ -335,6 +383,7 @@
 .content-area {
   padding: clamp(1rem, 2vw, 1.5rem) 0 clamp(1.5rem, 3vw, 2.5rem);
   flex: 1;
+  animation: pageFadeIn 0.3s ease both;
 }
 .section-header {
   display: flex;

@@ -125,24 +125,28 @@ export const googleLogin = async (req, res, next) => {
   }
 };
 
-export const getMe = async (req, res) => {
-  const userDoc = await User.findOne({ googleId: req.user.id });
-  if (!userDoc) {
-    return res.json({ user: req.user });
-  }
+export const getMe = async (req, res, next) => {
+  try {
+    const userDoc = await User.findOne({ googleId: req.user.id });
+    if (!userDoc) {
+      return res.json({ user: req.user });
+    }
 
-  return res.json({
-    user: {
-      id: userDoc.googleId,
-      name: userDoc.name,
-      username: userDoc.username,
-      googleName: userDoc.googleName,
-      email: userDoc.email,
-      picture: userDoc.picture,
-      role: userDoc.role,
-      bio: userDoc.bio,
-      phone: userDoc.phone,
-      location: userDoc.location,
-    },
-  });
+    return res.json({
+      user: {
+        id: userDoc.googleId,
+        name: userDoc.name,
+        username: userDoc.username,
+        googleName: userDoc.googleName,
+        email: userDoc.email,
+        picture: userDoc.picture,
+        role: userDoc.role,
+        bio: userDoc.bio,
+        phone: userDoc.phone,
+        location: userDoc.location,
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
 };

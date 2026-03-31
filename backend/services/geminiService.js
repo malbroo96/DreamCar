@@ -144,4 +144,10 @@ export const chatWithGemini = async ({ question, messages }) => {
   return handleChatSupport(lastUserMessage?.content || "");
 };
 
-export const extractRcDetailsFromBase64 = async ({ base64Image }) => extractRCDetails(base64Image);
+export const extractRcDetailsFromBase64 = async ({ base64Image, mimeType }) => {
+  if (mimeType) {
+    const data = String(base64Image || "").replace(/^data:[^;]+;base64,/i, "");
+    return extractRCDetails(`data:${mimeType};base64,${data}`);
+  }
+  return extractRCDetails(base64Image);
+};

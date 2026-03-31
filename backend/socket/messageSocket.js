@@ -43,6 +43,8 @@ const canAccessThread = (thread, user) => {
 const threadRoom = (threadId) => `thread:${threadId}`;
 const userRoom = (userId) => `user:${userId}`;
 
+const onlineUserIds = new Set();
+
 export const registerMessageSocketHandlers = (io) => {
   io.use((socket, next) => {
     try {
@@ -54,7 +56,15 @@ export const registerMessageSocketHandlers = (io) => {
   });
 
   io.on("connection", (socket) => {
-    socket.join(userRoom(socket.user.id));
+    const uid = socket.user.id;
+    socket.join(userRoom(uid));
+
+    onlineUserIds.add(uid);
+    io.emit("user:online", { userId: uid, online: true });
+
+    socket.on("presence:getOnline", (_, ack) => {
+      if (typeof ack === "function") ack({ userIds: [...onlineUserIds] });
+    });
 
     socket.on("thread:join", async ({ threadId }, ack) => {
       try {
@@ -72,6 +82,35 @@ export const registerMessageSocketHandlers = (io) => {
     socket.on("thread:leave", ({ threadId }) => {
       if (!threadId) return;
       socket.leave(threadRoom(threadId));
+    });
+
+    socket.on("user:typing", ({ threadId }) => {
+      if (!threadId) return;
+      socket.to(threadRoom(threadId)).emit("user:typing", {
+        threadId: String(threadId),
+        userId: uid,
+      });
+    });
+
+    socket.on("thread:markRead", async ({ threadId }, ack) => {
+      try {
+        if (!threadId) throw new Error("threadId required");
+        const result = await Message.updateMany(
+          {
+            threadId,
+            senderId: { $ne: uid },
+            readBy: { $ne: uid },
+          },
+          { $addToSet: { readBy: uid } }
+        );
+        io.to(threadRoom(threadId)).emit("message:read", {
+          threadId: String(threadId),
+          readBy: uid,
+        });
+        if (typeof ack === "function") ack({ ok: true, updated: result.modifiedCount });
+      } catch (error) {
+        if (typeof ack === "function") ack({ ok: false, message: error.message });
+      }
     });
 
     socket.on("message:send", async ({ threadId, text }, ack) => {
@@ -120,6 +159,21 @@ export const registerMessageSocketHandlers = (io) => {
         }
       } catch (error) {
         if (typeof ack === "function") ack({ ok: false, message: error.message || "Failed to send message" });
+      }
+    });
+
+    socket.on("disconnect", () => {
+      const sockets = io.sockets.sockets;
+      let stillConnected = false;
+      for (const [, s] of sockets) {
+        if (s.user?.id === uid && s.id !== socket.id) {
+          stillConnected = true;
+          break;
+        }
+      }
+      if (!stillConnected) {
+        onlineUserIds.delete(uid);
+        io.emit("user:online", { userId: uid, online: false });
       }
     });
   });

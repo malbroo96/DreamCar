@@ -5,6 +5,7 @@ import Car from "../models/Car.js";
 import User from "../models/User.js";
 import cloudinary from "../config/cloudinary.js";
 import { createInspectionOrder } from "../services/paymentService.js";
+import { createAndEmitNotification, notifyMany } from "../services/notificationService.js";
 
 const QUALITY_BANDS = {
   high: { min: 75, max: 100 },
@@ -237,6 +238,19 @@ export const acceptInspection = async (req, res, next) => {
     inspection.inspectorName = req.user.name || "";
     inspection.inspectorEmail = req.user.email || "";
     await inspection.save();
+
+    const inspName = req.user.name || "An inspector";
+    const carLabel = inspection.carTitle || "your car";
+    notifyMany(
+      [inspection.buyerId, inspection.sellerId],
+      {
+        type: "inspection_assigned",
+        title: "Inspector Assigned",
+        message: `${inspName} has been assigned to inspect "${carLabel}".`,
+        data: { inspectionId: inspection._id.toString(), carId: inspection.carId?.toString() },
+      }
+    ).catch(() => {});
+
     res.json(inspection);
   } catch (error) {
     next(error);
@@ -287,6 +301,17 @@ export const submitReport = async (req, res, next) => {
     inspection.inspectedAt = new Date();
     inspection.status = "completed";
     await inspection.save();
+
+    const carLabel = inspection.carTitle || "the car";
+    notifyMany(
+      [inspection.buyerId, inspection.sellerId],
+      {
+        type: "inspection_completed",
+        title: "Inspection Report Ready",
+        message: `The inspection report for "${carLabel}" has been submitted. View the results on your Inspections page.`,
+        data: { inspectionId: inspection._id.toString(), carId: inspection.carId?.toString() },
+      }
+    ).catch(() => {});
 
     res.json(inspection);
   } catch (error) {
@@ -571,6 +596,36 @@ export const reviewApplication = async (req, res, next) => {
     }
 
     await application.save();
+
+    const applicantName = application.basicInfo?.name || application.applicantSnapshot?.name || "Applicant";
+    const notifMap = {
+      approved: {
+        type: "application_approved",
+        title: "Application Approved",
+        message: `Congratulations ${applicantName}! Your inspector application has been approved. You can now accept inspection jobs.`,
+      },
+      rejected: {
+        type: "application_rejected",
+        title: "Application Update",
+        message: `Hi ${applicantName}, your inspector application was not approved. Reason: ${application.status.rejectionReason}`,
+      },
+      under_review: {
+        type: "application_under_review",
+        title: "Application Under Review",
+        message: `Hi ${applicantName}, your inspector application is now being reviewed by our team.`,
+      },
+    };
+    const notif = notifMap[status];
+    if (notif) {
+      createAndEmitNotification({
+        recipientId: application.userId,
+        type: notif.type,
+        title: notif.title,
+        message: notif.message,
+        data: { applicationId: application._id.toString() },
+      }).catch(() => {});
+    }
+
     res.json({ message: `Application ${status}`, application: buildApplicationSummary(application) });
   } catch (error) {
     next(error);

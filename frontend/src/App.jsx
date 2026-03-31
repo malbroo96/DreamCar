@@ -5,6 +5,7 @@ import ErrorBoundary from "./components/ErrorBoundary";
 import Spinner from "./components/Spinner";
 import ChatbotWidget from "./components/chatbot/ChatbotWidget";
 import CarsAnimation from "./components/CarsAnimation";
+import ThemeToggle from "./components/ThemeToggle";
 import useDocumentMeta from "./hooks/useDocumentMeta";
 import { getStoredUser, logout, refreshCurrentUser, setStoredUser } from "./services/authService";
 import { clearMessageNotificationCache, getMessageNotifications } from "./services/messageService";
@@ -42,10 +43,6 @@ const Logo = () => (
   </NavLink>
 );
 
-/* ── Browse dropdown ── */
-const BRANDS = ["Maruti Suzuki","Hyundai","Tata","Honda","Toyota","Kia","Mahindra","Ford"];
-const CITIES = ["Chennai","Mumbai","Bangalore","Delhi","Hyderabad","Pune","Kolkata","Ahmedabad"];
-
 const META_BY_PATH = {
   "/": {
     title: "Buy and Sell Used Cars in India",
@@ -81,38 +78,14 @@ const META_BY_PATH = {
   },
 };
 
-const BrowseDropdown = ({ onClose, onFilter }) => (
-  <div className="nav-dropdown-menu">
-    <div className="nav-dropdown-col">
-      <p className="nav-dropdown-heading">By Brand</p>
-      {BRANDS.map((b) => (
-        <button key={b} className="nav-dropdown-item" onClick={() => { onFilter("brand", b); onClose(); }}>
-          🚗 {b}
-        </button>
-      ))}
-    </div>
-    <div className="nav-dropdown-divider" />
-    <div className="nav-dropdown-col">
-      <p className="nav-dropdown-heading">By City</p>
-      {CITIES.map((c) => (
-        <button key={c} className="nav-dropdown-item" onClick={() => { onFilter("city", c); onClose(); }}>
-          📍 {c}
-        </button>
-      ))}
-    </div>
-  </div>
-);
-
 const App = () => {
   const location = useLocation();
   const [user, setUser]               = useState(() => getStoredUser());
   const [authResolved, setAuthResolved] = useState(() => !getStoredUser());
   const [unreadCount, setUnreadCount] = useState(0);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
-  const [browseOpen, setBrowseOpen]   = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const [scrolled, setScrolled]       = useState(false);
-  const browseRef = useRef(null);
   const userRef   = useRef(null);
 
   const isAuthenticated = Boolean(user);
@@ -154,14 +127,23 @@ const App = () => {
     return () => { mounted = false; };
   }, []);
 
-  /* Close dropdowns on outside click */
+  /* Close dropdowns on outside click or Escape */
   useEffect(() => {
-    const handler = (e) => {
-      if (browseRef.current && !browseRef.current.contains(e.target)) setBrowseOpen(false);
-      if (userRef.current   && !userRef.current.contains(e.target))   setUserMenuOpen(false);
+    const handleClick = (e) => {
+      if (userRef.current && !userRef.current.contains(e.target)) setUserMenuOpen(false);
     };
-    document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
+    const handleKey = (e) => {
+      if (e.key === "Escape") {
+        setUserMenuOpen(false);
+        setMobileNavOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClick);
+    document.addEventListener("keydown", handleKey);
+    return () => {
+      document.removeEventListener("mousedown", handleClick);
+      document.removeEventListener("keydown", handleKey);
+    };
   }, []);
 
   /* Scroll shadow */
@@ -174,7 +156,6 @@ const App = () => {
   /* Close mobile nav on route change */
   useEffect(() => {
     setMobileNavOpen(false);
-    setBrowseOpen(false);
     setUserMenuOpen(false);
   }, [location.pathname]);
 
@@ -215,17 +196,13 @@ const App = () => {
     setUserMenuOpen(false);
   };
 
-  const handleBrowseFilter = (key, value) => {
-    /* Navigate to home with filter param */
-    window.location.href = `/?${key}=${encodeURIComponent(value)}`;
-  };
-
   const initials = (user?.name || "U").split(" ").map((w) => w[0]).join("").toUpperCase().slice(0, 2);
 
   return (
     <ToastProvider>
       <ErrorBoundary>
         <div className="app-shell">
+          <a href="#main-content" className="skip-to-content">Skip to main content</a>
           <CarsAnimation />
           <div className="app-content-wrapper">
 
@@ -238,11 +215,14 @@ const App = () => {
                 {/* Logo */}
                 <Logo />
 
-                {/* Hamburger */}
-                <button className="nav-hamburger" aria-label="Toggle navigation"
-                  onClick={() => setMobileNavOpen((v) => !v)}>
-                  <span /><span /><span />
-                </button>
+                <div className="topbar-actions">
+                  <ThemeToggle />
+                  {/* Hamburger */}
+                  <button className="nav-hamburger" aria-label="Toggle navigation"
+                    onClick={() => setMobileNavOpen((v) => !v)}>
+                    <span /><span /><span />
+                  </button>
+                </div>
 
                 {/* Nav links */}
                 <nav className={`nav-links ${mobileNavOpen ? "nav-links--open" : ""}`}>
@@ -255,20 +235,12 @@ const App = () => {
                     </NavLink>
                   )}
 
-                  {/* Browse Cars + dropdown */}
                   {isAuthenticated && (
-                    <div className="nav-dropdown-wrap" ref={browseRef}>
-                      <button
-                        className={`nav-link nav-link-btn ${browseOpen ? "nav-link--open" : ""}`}
-                        onClick={() => setBrowseOpen((v) => !v)}
-                      >
-                        Browse Cars
-                        <span className={`nav-chevron ${browseOpen ? "nav-chevron--up" : ""}`}>▼</span>
-                      </button>
-                      {browseOpen && (
-                        <BrowseDropdown onClose={() => setBrowseOpen(false)} onFilter={handleBrowseFilter} />
-                      )}
-                    </div>
+                    <NavLink to="/"
+                      className={({ isActive }) => `nav-link${isActive ? " active" : ""}`}
+                      onClick={() => setMobileNavOpen(false)}>
+                      Home
+                    </NavLink>
                   )}
 
                   {isAuthenticated && (
@@ -347,7 +319,7 @@ const App = () => {
               </div>
             </header>
 
-            <main className="container content-area">
+            <main id="main-content" className="container content-area" tabIndex={-1}>
               <Suspense fallback={<PageLoader />}>
                 {authResolved ? (
                   <Routes>

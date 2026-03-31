@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import CarCard from "../components/CarCard";
 import CarFilters from "../components/CarFilters";
 import Spinner from "../components/Spinner";
@@ -109,7 +109,15 @@ const FEEDBACK_STORAGE_KEY = "dreamcar-home-feedback";
 
 const HomePage = () => {
   const navigate = useNavigate();
-  const [filters, setFilters] = useState(defaultFilters);
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [filters, setFilters] = useState(() => {
+    const initial = { ...defaultFilters };
+    for (const key of Object.keys(defaultFilters)) {
+      const val = searchParams.get(key);
+      if (val) initial[key] = val;
+    }
+    return initial;
+  });
   const [heroSearch, setHeroSearch] = useState("");
   const [stats, setStats] = useState({
     carsListed: 0,
@@ -421,6 +429,7 @@ const HomePage = () => {
                 <CarCard
                   key={car._id}
                   car={car}
+                  currentUserId={user?.id}
                   adminActions={
                     car.ownerId && car.ownerId !== user?.id ? (
                       <button type="button" className="btn btn-secondary" onClick={() => handleStartChat(car)}>
@@ -448,6 +457,7 @@ const HomePage = () => {
                 <CarCard
                   key={car._id}
                   car={car}
+                  currentUserId={user?.id}
                   adminActions={
                     car.ownerId && car.ownerId !== user?.id ? (
                       <button type="button" className="btn btn-secondary" onClick={() => handleStartChat(car)}>

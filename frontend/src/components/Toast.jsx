@@ -34,7 +34,7 @@ export const ToastProvider = ({ children }) => {
   return (
     <ToastContext.Provider value={toast}>
       {children}
-      <div className="toast-container">
+      <div className="toast-container" aria-live="polite" role="status">
         {toasts.map((t) => (
           <div key={t.id} className={`toast toast--${t.type}`}>
             <span className="toast-icon">

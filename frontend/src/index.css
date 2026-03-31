@@ -1,10 +1,104 @@
+/* ═══════════════════════════════════════════════
+   Design tokens -- Light theme (default)
+═══════════════════════════════════════════════ */
 :root {
+  /* Backgrounds */
+  --color-bg-primary: #ffffff;
+  --color-bg-secondary: #f8fbff;
+  --color-bg-tertiary: #eff5ff;
+  --color-bg-page: #f4f7fb;
+  --color-bg-page-gradient: radial-gradient(circle at top, #e7efff, #f4f7fb 40%);
+  --color-bg-input: #ffffff;
+  --color-bg-card: #ffffff;
+  --color-bg-hover: rgba(0,0,0,0.03);
+
+  /* Text */
+  --color-text-primary: #0c1f36;
+  --color-text-secondary: #4c6785;
+  --color-text-muted: #7a96b4;
+  --color-text-inverse: #ffffff;
+
+  /* Accent */
+  --color-accent: #0b6ef3;
+  --color-accent-hover: #0955c8;
+  --color-accent-light: #dce8fc;
+  --color-accent-bg: rgba(11, 110, 243, 0.08);
+
+  /* Status */
+  --color-success: #22c55e;
+  --color-success-bg: #f0fdf4;
+  --color-danger: #c63030;
+  --color-danger-bg: #fff0f0;
+  --color-warning: #f59e0b;
+  --color-warning-bg: #fffbeb;
+
+  /* Borders & Shadows */
+  --color-border: #e4ebf3;
+  --color-border-light: #f0f4fa;
+  --shadow-sm: 0 1px 3px rgba(0,0,0,0.07);
+  --shadow-md: 0 4px 12px rgba(0,0,0,0.08);
+  --shadow-lg: 0 8px 24px rgba(25, 45, 80, 0.06);
+  --shadow-xl: 0 8px 32px rgba(25, 45, 80, 0.08);
+
+  /* Radius */
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 18px;
+
+  /* Navbar (always dark) */
+  --color-nav-bg: #0c1a2e;
+  --color-nav-text: #8fa8c8;
+  --color-nav-active: #d4af37;
+  --color-nav-border: rgba(212,175,55,0.2);
+
+  /* Typography */
   font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
-  color: #12263a;
-  background: #f4f7fb;
+  color: var(--color-text-primary);
+  background: var(--color-bg-page);
   line-height: 1.4;
 }
 
+/* ═══════════════════════════════════════════════
+   Dark theme tokens
+═══════════════════════════════════════════════ */
+[data-theme="dark"] {
+  --color-bg-primary: #0f1923;
+  --color-bg-secondary: #162233;
+  --color-bg-tertiary: #1c2d42;
+  --color-bg-page: #0b1220;
+  --color-bg-page-gradient: radial-gradient(circle at top, #0e1a2a, #0b1220 40%);
+  --color-bg-input: #162233;
+  --color-bg-card: #13202f;
+  --color-bg-hover: rgba(255,255,255,0.05);
+
+  --color-text-primary: #e2eaf3;
+  --color-text-secondary: #94b0cc;
+  --color-text-muted: #607d9b;
+  --color-text-inverse: #0c1f36;
+
+  --color-accent: #4a9eff;
+  --color-accent-hover: #3b8ff3;
+  --color-accent-light: #1c3254;
+  --color-accent-bg: rgba(74, 158, 255, 0.1);
+
+  --color-success: #4ade80;
+  --color-success-bg: #0d2818;
+  --color-danger: #f87171;
+  --color-danger-bg: #2a1010;
+  --color-warning: #fbbf24;
+  --color-warning-bg: #2a2008;
+
+  --color-border: #243348;
+  --color-border-light: #1c2d42;
+  --shadow-sm: 0 1px 3px rgba(0,0,0,0.2);
+  --shadow-md: 0 4px 12px rgba(0,0,0,0.25);
+  --shadow-lg: 0 8px 24px rgba(0,0,0,0.3);
+  --shadow-xl: 0 8px 32px rgba(0,0,0,0.35);
+}
+
+/* ═══════════════════════════════════════════════
+   Global reset & base
+═══════════════════════════════════════════════ */
 * {
   box-sizing: border-box;
 }
@@ -12,8 +106,10 @@
 body {
   margin: 0;
   min-width: 320px;
-  background: radial-gradient(circle at top, #e7efff, #f4f7fb 40%);
+  background: var(--color-bg-page-gradient);
+  color: var(--color-text-primary);
   overflow-x: hidden;
+  transition: background 0.3s, color 0.3s;
 }
 
 a {
@@ -32,10 +128,10 @@ img {
 }
 
 .card {
-  background: #fff;
-  border: 1px solid #e4ebf3;
-  border-radius: 12px;
-  box-shadow: 0 8px 24px rgba(25, 45, 80, 0.06);
+  background: var(--color-bg-card);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-lg);
 }
 
 .btn {
@@ -45,21 +141,24 @@ img {
   cursor: pointer;
   font-weight: 600;
   min-height: 42px;
+  transition: opacity 0.15s, transform 0.15s;
 }
+.btn:active { transform: scale(0.97); }
 
 .btn-primary {
-  color: #fff;
-  background: #0b6ef3;
+  color: var(--color-text-inverse);
+  background: var(--color-accent);
 }
+.btn-primary:hover { background: var(--color-accent-hover); }
 
 .btn-secondary {
-  color: #0b2545;
-  background: #dce8fc;
+  color: var(--color-text-primary);
+  background: var(--color-accent-light);
 }
 
 .btn-danger {
   color: #fff;
-  background: #c63030;
+  background: var(--color-danger);
 }
 
 .grid {
@@ -71,15 +170,25 @@ input,
 select,
 textarea {
   width: 100%;
-  border: 1px solid #cfdae8;
+  border: 1px solid var(--color-border);
   border-radius: 10px;
   padding: 0.65rem 0.75rem;
   font: inherit;
+  background: var(--color-bg-input);
+  color: var(--color-text-primary);
+  transition: border-color 0.2s, background 0.2s;
+}
+input:focus,
+select:focus,
+textarea:focus {
+  outline: none;
+  border-color: var(--color-accent);
 }
 
 label {
   font-size: 0.9rem;
   font-weight: 600;
+  color: var(--color-text-secondary);
 }
 
 .field {
@@ -87,6 +196,7 @@ label {
   gap: 0.35rem;
 }
 
+/* ── Scroll reveal ── */
 .reveal-on-scroll {
   opacity: 0;
   transform: translateY(16px) scale(0.99);
@@ -105,6 +215,53 @@ label {
   filter: blur(0);
 }
 
+/* ── Page transition wrapper ── */
+.page-fade-enter {
+  animation: pageFadeIn 0.3s ease both;
+}
+@keyframes pageFadeIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ── Skeleton loader ── */
+.skeleton {
+  background: linear-gradient(90deg,
+    var(--color-border-light) 25%,
+    var(--color-bg-tertiary) 50%,
+    var(--color-border-light) 75%);
+  background-size: 200% 100%;
+  animation: skeletonShimmer 1.5s infinite ease-in-out;
+  border-radius: var(--radius-sm);
+}
+@keyframes skeletonShimmer {
+  0%   { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+.skeleton-text {
+  height: 0.9rem;
+  margin-bottom: 0.5rem;
+  border-radius: 4px;
+}
+.skeleton-text--short { width: 60%; }
+.skeleton-text--medium { width: 80%; }
+.skeleton-heading {
+  height: 1.3rem;
+  width: 50%;
+  margin-bottom: 0.75rem;
+  border-radius: 4px;
+}
+.skeleton-card {
+  height: 220px;
+  border-radius: var(--radius-md);
+}
+.skeleton-avatar {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+}
+
+/* ── Responsive ── */
 @media (max-width: 1024px) {
   .container {
     width: min(1160px, calc(100vw - 2rem));
@@ -153,5 +310,8 @@ label {
     transform: none;
     filter: none;
     transition: none;
+  }
+  .skeleton {
+    animation: none;
   }
 }

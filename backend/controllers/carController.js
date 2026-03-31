@@ -366,7 +366,7 @@ export const createCar = async (req, res, next) => {
       location: req.body.location,
       city: req.body.city || "",
       area: req.body.area || "",
-      status: req.body.status || "approved",
+      status: req.user?.role === "admin" ? (req.body.status || "approved") : "pending",
       ownerId: req.user.id,
       ownerEmail: req.user.email,
       ownerName: req.user.name,

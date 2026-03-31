@@ -3,6 +3,7 @@ import { useSearchParams } from "react-router-dom";
 import {
   getThreadMessages,
   getThreads,
+  sendImageMessage,
   sendThreadMessage,
   startDirectConversation,
 } from "../services/messageService";
@@ -34,7 +35,39 @@ const formatThreadDate = (dateStr) => {
   return d.toLocaleDateString([], { month: "short", day: "numeric" });
 };
 
+const getDateLabel = (dateStr) => {
+  const d = new Date(dateStr);
+  const now = new Date();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const msgDay = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+  const diffDays = Math.round((today - msgDay) / 86400000);
+  if (diffDays === 0) return "Today";
+  if (diffDays === 1) return "Yesterday";
+  return d.toLocaleDateString([], { month: "short", day: "numeric", year: d.getFullYear() !== now.getFullYear() ? "numeric" : undefined });
+};
+
+const isSameDay = (d1, d2) => {
+  const a = new Date(d1);
+  const b = new Date(d2);
+  return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
+};
+
 const TYPING_TIMEOUT_MS = 2500;
+const ACCEPTED_IMAGE_TYPES = "image/jpeg,image/png,image/webp,image/gif";
+
+/* ── Tick icons ── */
+const SingleTick = () => (
+  <svg className="tick-icon tick-gray" width="16" height="11" viewBox="0 0 16 11" fill="none">
+    <path d="M1 5.5L5.5 10L14.5 1" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
+  </svg>
+);
+
+const DoubleTick = ({ read }) => (
+  <svg className={`tick-icon ${read ? "tick-blue" : "tick-gray"}`} width="20" height="11" viewBox="0 0 20 11" fill="none">
+    <path d="M1 5.5L5.5 10L14.5 1" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
+    <path d="M5 5.5L9.5 10L18.5 1" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
+  </svg>
+);
 
 /* ════════════════════════════════════════
    MessagesPage
@@ -59,16 +92,34 @@ const MessagesPage = () => {
   const [onlineUsers, setOnlineUsers] = useState(new Set());
   const [isOtherTyping, setIsOtherTyping] = useState(false);
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(true);
+  const [showScrollFab, setShowScrollFab] = useState(false);
+  const [imagePreview, setImagePreview] = useState(null);
+  const [lightboxUrl, setLightboxUrl] = useState(null);
 
   const selectedThreadRef = useRef("");
   const messagesEndRef = useRef(null);
+  const messagesAreaRef = useRef(null);
   const typingTimeoutRef = useRef(null);
   const textareaRef = useRef(null);
+  const fileInputRef = useRef(null);
+  const observerRef = useRef(null);
 
   /* ── scroll to bottom ── */
   const scrollToBottom = (behavior = "smooth") => {
     messagesEndRef.current?.scrollIntoView({ behavior });
   };
+
+  /* ── intersection observer for scroll FAB ── */
+  useEffect(() => {
+    const sentinel = messagesEndRef.current;
+    if (!sentinel) return;
+    observerRef.current = new IntersectionObserver(
+      ([entry]) => setShowScrollFab(!entry.isIntersecting),
+      { root: messagesAreaRef.current, threshold: 0.1 }
+    );
+    observerRef.current.observe(sentinel);
+    return () => observerRef.current?.disconnect();
+  }, [selectedThreadId, messages.length > 0]);
 
   /* ── load threads ── */
   const loadThreads = useCallback(async () => {
@@ -83,6 +134,11 @@ const MessagesPage = () => {
     setMessages(data.messages || []);
     setThreadMeta(data.thread || null);
     setTimeout(() => scrollToBottom("instant"), 50);
+
+    const socket = getSocket();
+    if (socket?.connected) {
+      socket.emit("thread:markRead", { threadId });
+    }
   }, []);
 
   /* ── boot ── */
@@ -110,11 +166,17 @@ const MessagesPage = () => {
   useEffect(() => { selectedThreadRef.current = selectedThreadId; }, [selectedThreadId]);
 
   /* ── scroll whenever messages change ── */
-  useEffect(() => { scrollToBottom(); }, [messages]);
+  useEffect(() => {
+    if (!showScrollFab) scrollToBottom();
+  }, [messages, showScrollFab]);
 
   /* ── socket ── */
   useEffect(() => {
     const socket = connectSocket();
+
+    socket.emit("presence:getOnline", {}, (resp) => {
+      if (resp?.userIds) setOnlineUsers(new Set(resp.userIds.map(String)));
+    });
 
     const handleNewMessage = ({ threadId, message }) => {
       if (String(threadId) !== selectedThreadRef.current) return;
@@ -144,16 +206,30 @@ const MessagesPage = () => {
       });
     };
 
+    const handleMessageRead = ({ threadId, readBy }) => {
+      if (String(threadId) !== selectedThreadRef.current) return;
+      setMessages((prev) =>
+        prev.map((m) => {
+          if (m.readBy && !m.readBy.includes(readBy)) {
+            return { ...m, readBy: [...m.readBy, readBy] };
+          }
+          return m;
+        })
+      );
+    };
+
     socket.on("message:new", handleNewMessage);
     socket.on("thread:updated", handleThreadUpdated);
     socket.on("user:typing", handleTyping);
     socket.on("user:online", handleOnlineStatus);
+    socket.on("message:read", handleMessageRead);
 
     return () => {
       socket.off("message:new", handleNewMessage);
       socket.off("thread:updated", handleThreadUpdated);
       socket.off("user:typing", handleTyping);
       socket.off("user:online", handleOnlineStatus);
+      socket.off("message:read", handleMessageRead);
       disconnectSocket();
       clearTimeout(typingTimeoutRef.current);
     };
@@ -170,10 +246,18 @@ const MessagesPage = () => {
   /* ── emit typing ── */
   const handleTextChange = (e) => {
     setText(e.target.value);
+    autoResizeTextarea(e.target);
     const socket = getSocket();
     if (socket?.connected && selectedThreadId) {
       socket.emit("user:typing", { threadId: selectedThreadId, userId: currentUserId });
     }
+  };
+
+  /* ── auto-resize textarea ── */
+  const autoResizeTextarea = (el) => {
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = Math.min(el.scrollHeight, 120) + "px";
   };
 
   /* ── select thread ── */
@@ -187,9 +271,19 @@ const MessagesPage = () => {
   /* ── send message ── */
   const handleSend = async (e) => {
     e?.preventDefault();
-    if (!selectedThreadId || !text.trim() || sendLoading) return;
+    if (sendLoading) return;
+
+    if (imagePreview) {
+      await handleSendImage();
+      return;
+    }
+
+    if (!selectedThreadId || !text.trim()) return;
     const messageText = text.trim();
     setText("");
+    if (textareaRef.current) {
+      textareaRef.current.style.height = "auto";
+    }
     textareaRef.current?.focus();
 
     try {
@@ -212,6 +306,41 @@ const MessagesPage = () => {
     } finally {
       setSendLoading(false);
     }
+  };
+
+  /* ── send image ── */
+  const handleSendImage = async () => {
+    if (!selectedThreadId || !imagePreview?.file) return;
+    try {
+      setSendLoading(true);
+      const created = await sendImageMessage(selectedThreadId, imagePreview.file, text.trim());
+      setMessages((prev) => {
+        if (prev.some((m) => m._id === created._id)) return prev;
+        return [...prev, created];
+      });
+      setImagePreview(null);
+      setText("");
+      if (textareaRef.current) textareaRef.current.style.height = "auto";
+      await loadThreads();
+    } catch (err) {
+      setError(err.response?.data?.message || err.message || "Failed to send image");
+    } finally {
+      setSendLoading(false);
+    }
+  };
+
+  /* ── handle file select ── */
+  const handleFileSelect = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const url = URL.createObjectURL(file);
+    setImagePreview({ file, url });
+    e.target.value = "";
+  };
+
+  const cancelImagePreview = () => {
+    if (imagePreview?.url) URL.revokeObjectURL(imagePreview.url);
+    setImagePreview(null);
   };
 
   /* ── send on Enter (Shift+Enter = newline) ── */
@@ -261,10 +390,25 @@ const MessagesPage = () => {
     }
   };
 
-  /* ── participant online check ── */
+  /* ── participant helpers ── */
   const isParticipantOnline = () => {
     const pid = threadMeta?.participant?._id || threadMeta?.participant?.id;
     return pid ? onlineUsers.has(String(pid)) : false;
+  };
+
+  const getOtherParticipantId = () => {
+    return threadMeta?.participant?._id || threadMeta?.participant?.id || null;
+  };
+
+  /* ── read receipt logic ── */
+  const getTickStatus = (message) => {
+    const otherId = getOtherParticipantId();
+    if (!otherId) return "sent";
+    const isRead = message.readBy && message.readBy.includes(String(otherId));
+    if (isRead) return "read";
+    const otherOnline = onlineUsers.has(String(otherId));
+    if (otherOnline) return "delivered";
+    return "sent";
   };
 
   /* ── loading ── */
@@ -273,7 +417,7 @@ const MessagesPage = () => {
       <div className="messages-page">
         <div className="messages-loading">
           <div className="spinner-lg" />
-          <p>Loading messages…</p>
+          <p>Loading messages...</p>
         </div>
       </div>
     );
@@ -283,8 +427,16 @@ const MessagesPage = () => {
     <div className="messages-page">
       {error && (
         <div className="msg-error-banner">
-          <span>⚠ {error}</span>
-          <button onClick={() => setError("")}>✕</button>
+          <span>{error}</span>
+          <button onClick={() => setError("")}>&#10005;</button>
+        </div>
+      )}
+
+      {/* Lightbox overlay */}
+      {lightboxUrl && (
+        <div className="image-lightbox" onClick={() => setLightboxUrl(null)}>
+          <button className="lightbox-close" onClick={() => setLightboxUrl(null)}>&#10005;</button>
+          <img src={lightboxUrl} alt="Full size" onClick={(e) => e.stopPropagation()} />
         </div>
       )}
 
@@ -327,7 +479,7 @@ const MessagesPage = () => {
               </form>
 
               {searchLoading && (
-                <div className="search-results-msg">Searching…</div>
+                <div className="search-results-msg">Searching...</div>
               )}
               {!searchLoading && searchedUsers.length > 0 && (
                 <div className="search-results">
@@ -359,7 +511,7 @@ const MessagesPage = () => {
           <div className="thread-list">
             {threads.length === 0 && (
               <div className="thread-empty">
-                <div className="thread-empty-icon">💬</div>
+                <div className="thread-empty-icon">&#128172;</div>
                 <p>No conversations yet.</p>
                 <span>Search for a user to start chatting.</span>
               </div>
@@ -368,6 +520,15 @@ const MessagesPage = () => {
               const isActive = thread._id === selectedThreadId;
               const participantId = thread.participant?._id || thread.participant?.id;
               const participantOnline = participantId ? onlineUsers.has(String(participantId)) : false;
+              const lastMsg = thread.lastMessage;
+              const hasImage = lastMsg?.image?.url;
+              const previewText = lastMsg
+                ? hasImage
+                  ? (lastMsg.senderId === currentUserId ? "You sent a photo" : "Sent a photo")
+                  : lastMsg.text
+                    ? (lastMsg.senderId === currentUserId ? `You: ${lastMsg.text}` : lastMsg.text)
+                    : (thread.carTitle || "Direct message")
+                : (thread.carTitle || "Direct message");
 
               return (
                 <button
@@ -386,13 +547,13 @@ const MessagesPage = () => {
                     <div className="thread-name">
                       {thread.participant?.name || "User"}
                     </div>
-                    <div className="thread-preview">
-                      {thread.carTitle || "Direct message"}
+                    <div className={`thread-preview ${thread.unreadCount > 0 ? "thread-preview--unread" : ""}`}>
+                      {previewText.length > 40 ? previewText.slice(0, 40) + "..." : previewText}
                     </div>
                   </div>
                   <div className="thread-meta">
                     <span className="thread-time">
-                      {formatThreadDate(thread.updatedAt)}
+                      {formatThreadDate(thread.lastMessageAt)}
                     </span>
                     {thread.unreadCount > 0 && (
                       <span className="thread-unread">{thread.unreadCount}</span>
@@ -443,27 +604,28 @@ const MessagesPage = () => {
                     {threadMeta?.participant?.name || "User"}
                   </div>
                   <div className="chat-header-sub">
-                    {isParticipantOnline() ? (
-                      <span className="status-online">● Online</span>
+                    {isOtherTyping ? (
+                      <span className="status-typing">typing...</span>
+                    ) : isParticipantOnline() ? (
+                      <span className="status-online">Online</span>
                     ) : (
-                      <span className="status-offline">● Offline</span>
+                      <span className="status-offline">Offline</span>
                     )}
                     {threadMeta?.carTitle && (
-                      <span className="chat-car-label"> · {threadMeta.carTitle}</span>
+                      <span className="chat-car-label"> &middot; {threadMeta.carTitle}</span>
                     )}
                   </div>
                 </div>
               </div>
 
               {/* Messages area */}
-              <div className="messages-area">
+              <div className="messages-area" ref={messagesAreaRef}>
                 {messages.length === 0 && (
                   <div className="messages-empty">
-                    <p>No messages yet. Say hello! 👋</p>
+                    <p>No messages yet. Say hello!</p>
                   </div>
                 )}
 
-                {/* Group messages by day would go here — keeping flat for now */}
                 {messages.map((message, idx) => {
                   const isOwn =
                     String(message.senderId) === String(currentUserId) ||
@@ -475,34 +637,63 @@ const MessagesPage = () => {
                     (!prevMsg ||
                       String(prevMsg.senderId) !== String(message.senderId));
 
+                  const showDateSeparator =
+                    idx === 0 || !isSameDay(prevMsg.createdAt, message.createdAt);
+
+                  const tickStatus = isOwn ? getTickStatus(message) : null;
+                  const hasImage = message.image?.url;
+
                   return (
-                    <div
-                      key={message._id}
-                      className={`message-row ${isOwn ? "message-row--own" : "message-row--other"}`}
-                    >
-                      {/* Avatar placeholder for spacing */}
-                      {!isOwn && (
-                        <div className="message-avatar-col">
-                          {showAvatar ? (
-                            <div className="message-avatar">
-                              {getInitials(message.senderName || "?")}
-                            </div>
-                          ) : (
-                            <div className="message-avatar-gap" />
-                          )}
+                    <div key={message._id}>
+                      {/* Date separator */}
+                      {showDateSeparator && (
+                        <div className="date-separator">
+                          <span>{getDateLabel(message.createdAt)}</span>
                         </div>
                       )}
 
-                      <div className="message-col">
-                        {showAvatar && !isOwn && (
-                          <div className="message-sender-name">{message.senderName}</div>
+                      <div
+                        className={`message-row ${isOwn ? "message-row--own" : "message-row--other"}`}
+                      >
+                        {!isOwn && (
+                          <div className="message-avatar-col">
+                            {showAvatar ? (
+                              <div className="message-avatar">
+                                {getInitials(message.senderName || "?")}
+                              </div>
+                            ) : (
+                              <div className="message-avatar-gap" />
+                            )}
+                          </div>
                         )}
-                        <div className={`message-bubble ${isOwn ? "bubble--own" : "bubble--other"}`}>
-                          <span className="bubble-text">{message.text}</span>
-                          <span className="bubble-time">
-                            {formatTime(message.createdAt)}
-                            {isOwn && <span className="bubble-tick"> ✓</span>}
-                          </span>
+
+                        <div className="message-col">
+                          {showAvatar && !isOwn && (
+                            <div className="message-sender-name">{message.senderName}</div>
+                          )}
+                          <div className={`message-bubble ${isOwn ? "bubble--own" : "bubble--other"}`}>
+                            {hasImage && (
+                              <img
+                                className="bubble-image"
+                                src={message.image.url}
+                                alt="Shared"
+                                onClick={() => setLightboxUrl(message.image.url)}
+                              />
+                            )}
+                            {message.text && (
+                              <span className="bubble-text">{message.text}</span>
+                            )}
+                            <span className="bubble-time">
+                              {formatTime(message.createdAt)}
+                              {isOwn && (
+                                <span className="bubble-ticks">
+                                  {tickStatus === "sent" && <SingleTick />}
+                                  {tickStatus === "delivered" && <DoubleTick read={false} />}
+                                  {tickStatus === "read" && <DoubleTick read={true} />}
+                                </span>
+                              )}
+                            </span>
+                          </div>
                         </div>
                       </div>
                     </div>
@@ -524,25 +715,70 @@ const MessagesPage = () => {
                 )}
 
                 <div ref={messagesEndRef} />
+
+                {/* Scroll to bottom FAB */}
+                {showScrollFab && (
+                  <button
+                    className="scroll-to-bottom"
+                    onClick={() => scrollToBottom()}
+                    aria-label="Scroll to bottom"
+                  >
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                      <polyline points="6 9 12 15 18 9"/>
+                    </svg>
+                  </button>
+                )}
               </div>
+
+              {/* Image preview bar */}
+              {imagePreview && (
+                <div className="image-preview">
+                  <img src={imagePreview.url} alt="Preview" />
+                  <div className="image-preview-info">
+                    <span>{imagePreview.file.name}</span>
+                    <span className="image-preview-size">
+                      {(imagePreview.file.size / 1024).toFixed(0)} KB
+                    </span>
+                  </div>
+                  <button className="image-preview-cancel" onClick={cancelImagePreview}>&#10005;</button>
+                </div>
+              )}
 
               {/* Input bar */}
               <div className="chat-input-bar">
                 <form onSubmit={handleSend} className="chat-input-form">
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept={ACCEPTED_IMAGE_TYPES}
+                    onChange={handleFileSelect}
+                    style={{ display: "none" }}
+                  />
+                  <button
+                    type="button"
+                    className="attachment-btn"
+                    onClick={() => fileInputRef.current?.click()}
+                    title="Send image"
+                    aria-label="Attach image"
+                  >
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/>
+                    </svg>
+                  </button>
                   <textarea
                     ref={textareaRef}
                     className="chat-textarea"
                     value={text}
                     onChange={handleTextChange}
                     onKeyDown={handleKeyDown}
-                    placeholder="Type a message…"
+                    placeholder={imagePreview ? "Add a caption..." : "Type a message..."}
                     rows={1}
                     aria-label="Message input"
                   />
                   <button
                     type="submit"
-                    className={`btn-send ${text.trim() ? "btn-send--active" : ""}`}
-                    disabled={!text.trim() || sendLoading}
+                    className={`btn-send ${(text.trim() || imagePreview) ? "btn-send--active" : ""}`}
+                    disabled={(!text.trim() && !imagePreview) || sendLoading}
                     aria-label="Send message"
                   >
                     {sendLoading ? (
@@ -554,7 +790,7 @@ const MessagesPage = () => {
                     )}
                   </button>
                 </form>
-                <p className="input-hint">Enter to send · Shift+Enter for new line</p>
+                <p className="input-hint">Enter to send &middot; Shift+Enter for new line</p>
               </div>
             </>
           )}

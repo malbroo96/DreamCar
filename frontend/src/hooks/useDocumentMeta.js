@@ -34,8 +34,7 @@ const ensureLinkTag = (selector, attributes) => {
 const useDocumentMeta = ({ title, description, path = "/" }) => {
   useEffect(() => {
     const fullTitle = title ? `${title} | ${SITE_NAME}` : SITE_NAME;
-    const normalizedPath = path === "/" ? "/" : `/#${path}`;
-    const canonicalUrl = `${SITE_URL}${normalizedPath}`;
+    const canonicalUrl = `${SITE_URL}${path}`;
 
     document.title = fullTitle;
 

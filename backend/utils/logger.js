@@ -1,22 +1,21 @@
-const formatContext = (context = {}) => {
-  const entries = Object.entries(context).filter(([, value]) => value !== undefined && value !== null && value !== "");
-  if (!entries.length) return "";
-  return ` ${JSON.stringify(Object.fromEntries(entries))}`;
-};
+import pino from "pino";
 
-const log = (level, message, context = {}) => {
-  const line = `[${new Date().toISOString()}] ${level.toUpperCase()} ${message}${formatContext(context)}`;
-  if (level === "error") {
-    console.error(line);
-    return;
-  }
-  console.log(line);
-};
+const isProduction = process.env.NODE_ENV === "production";
 
-export const logger = {
-  info: (message, context) => log("info", message, context),
-  warn: (message, context) => log("warn", message, context),
-  error: (message, context) => log("error", message, context),
-};
+export const logger = pino({
+  level: process.env.LOG_LEVEL || (isProduction ? "info" : "debug"),
+  ...(isProduction
+    ? {}
+    : {
+        transport: {
+          target: "pino-pretty",
+          options: {
+            colorize: true,
+            translateTime: "HH:MM:ss",
+            ignore: "pid,hostname",
+          },
+        },
+      }),
+});
 
 export default logger;
