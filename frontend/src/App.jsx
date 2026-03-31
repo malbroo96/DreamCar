@@ -87,6 +87,13 @@ const App = () => {
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const [scrolled, setScrolled]       = useState(false);
   const userRef   = useRef(null);
+  const prevPathRef = useRef(location.pathname);
+
+  if (prevPathRef.current !== location.pathname) {
+    prevPathRef.current = location.pathname;
+    if (mobileNavOpen) setMobileNavOpen(false);
+    if (userMenuOpen) setUserMenuOpen(false);
+  }
 
   const isAuthenticated = Boolean(user);
   const isAdmin = useMemo(() => user?.role === "admin", [user]);
@@ -103,10 +110,7 @@ const App = () => {
   });
 
   useEffect(() => {
-    if (!user) {
-      setAuthResolved(true);
-      return;
-    }
+    if (!user) return;
 
     let mounted = true;
     refreshCurrentUser()
@@ -125,6 +129,7 @@ const App = () => {
       });
 
     return () => { mounted = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   /* Close dropdowns on outside click or Escape */
@@ -152,12 +157,6 @@ const App = () => {
     window.addEventListener("scroll", handler, { passive: true });
     return () => window.removeEventListener("scroll", handler);
   }, []);
-
-  /* Close mobile nav on route change */
-  useEffect(() => {
-    setMobileNavOpen(false);
-    setUserMenuOpen(false);
-  }, [location.pathname]);
 
   useEffect(() => {
     if (!isAuthenticated) return;

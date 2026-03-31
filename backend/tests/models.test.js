@@ -41,6 +41,7 @@ describe("Car Model", () => {
       ownerId: "owner-123",
       ownerEmail: "owner@test.com",
       ownerName: "Owner",
+      rcDocument: { publicId: "test-rc-doc" },
     });
     expect(car.status).toBe("pending");
     expect(car.featured).toBe(false);

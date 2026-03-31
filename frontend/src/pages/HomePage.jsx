@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import CarCard from "../components/CarCard";
 import CarFilters from "../components/CarFilters";
@@ -109,7 +109,7 @@ const FEEDBACK_STORAGE_KEY = "dreamcar-home-feedback";
 
 const HomePage = () => {
   const navigate = useNavigate();
-  const [searchParams, setSearchParams] = useSearchParams();
+  const [searchParams] = useSearchParams();
   const [filters, setFilters] = useState(() => {
     const initial = { ...defaultFilters };
     for (const key of Object.keys(defaultFilters)) {
@@ -188,13 +188,31 @@ const HomePage = () => {
     rating: 5,
     text: "",
   });
-  const [submittedReviews, setSubmittedReviews] = useState([]);
+  const [submittedReviews, setSubmittedReviews] = useState(() => {
+    try {
+      const stored = window.localStorage.getItem(FEEDBACK_STORAGE_KEY);
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (Array.isArray(parsed)) return parsed;
+      }
+    } catch { /* ignore */ }
+    return [];
+  });
   const [feedbackError, setFeedbackError] = useState("");
   const [feedbackSuccess, setFeedbackSuccess] = useState("");
-  const [feedbackSubmitted, setFeedbackSubmitted] = useState(false);
+  const [feedbackSubmitted, setFeedbackSubmitted] = useState(() => {
+    try {
+      const stored = window.localStorage.getItem(FEEDBACK_STORAGE_KEY);
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (Array.isArray(parsed)) return parsed.length > 0;
+      }
+    } catch { /* ignore */ }
+    return false;
+  });
 
   const userCity = useMemo(() => getPrimaryLocation(user?.location), [user]);
-  const sortCarsByNearby = (list) => {
+  const sortCarsByNearby = useCallback((list) => {
     if (!userCity || filters.city) return list;
 
     return [...list].sort((a, b) => {
@@ -202,15 +220,15 @@ const HomePage = () => {
       const bNearby = getPrimaryLocation(b.city || b.location) === userCity ? 1 : 0;
       return bNearby - aNearby;
     });
-  };
+  }, [userCity, filters.city]);
 
   const featuredCars = useMemo(
     () => sortCarsByNearby(cars.filter((c) => c.featured)),
-    [cars, userCity, filters.city]
+    [cars, sortCarsByNearby]
   );
   const regularCars  = useMemo(
     () => sortCarsByNearby(cars.filter((c) => !c.featured)),
-    [cars, userCity, filters.city]
+    [cars, sortCarsByNearby]
   );
   const heroStats = useMemo(() => ([
     { value: stats.carsListed.toLocaleString("en-IN"), label: "Cars Listed" },
@@ -265,27 +283,6 @@ const HomePage = () => {
   const openFooterPage = (slug) => {
     navigate(`/info/${slug}`);
   };
-
-  useEffect(() => {
-    try {
-      const stored = window.localStorage.getItem(FEEDBACK_STORAGE_KEY);
-      if (!stored) return;
-      const parsed = JSON.parse(stored);
-      if (Array.isArray(parsed)) {
-        setSubmittedReviews(parsed);
-        setFeedbackSubmitted(parsed.length > 0);
-      }
-    } catch {
-      // Ignore local storage parsing failures and keep defaults.
-    }
-  }, []);
-
-  useEffect(() => {
-    setReviewForm((prev) => ({
-      ...prev,
-      name: prev.name || user?.name?.trim() || "",
-    }));
-  }, [user]);
 
   const handleReviewFormChange = (event) => {
     const { name, value } = event.target;
