@@ -17,6 +17,7 @@ describe("User Model", () => {
   });
 
   it("enforces unique googleId", async () => {
+    await User.init();
     await User.create({ googleId: "dup-id", email: "a@test.com", name: "A" });
     await expect(
       User.create({ googleId: "dup-id", email: "b@test.com", name: "B" })
